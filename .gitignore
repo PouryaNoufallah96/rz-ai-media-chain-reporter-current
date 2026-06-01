@@ -1,0 +1,9 @@
+backend/.env
+backend/__pycache__/
+*.pyc
+node_modules/
+temporary screenshots/
+.DS_Store
+CLAUDE*.md
+*.mp4
+check_front.png
