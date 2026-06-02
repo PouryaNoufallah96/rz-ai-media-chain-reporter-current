@@ -2195,6 +2195,16 @@ async function analyzeAndRoute() {
       mmState.lastShortlist = preResult.shortlisted;
     }
 
+    // On mobile, cap to 10 articles per brand to speed up editorial AI
+    if (window.innerWidth <= 768) {
+      const brandCount = {};
+      shortlistPayload = shortlistPayload.filter(a => {
+        const brand = a.routing?.primary_media || '_';
+        brandCount[brand] = (brandCount[brand] || 0) + 1;
+        return brandCount[brand] <= 10;
+      });
+    }
+
     const editRes = await fetch(`${API_BASE}/api/ai/editorial-select`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
