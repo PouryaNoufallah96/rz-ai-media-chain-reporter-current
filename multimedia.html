@@ -265,6 +265,28 @@
     .kw-strong{background:rgba(0,212,160,.1);color:#00d4a0;border:1px solid rgba(0,212,160,.22);}
     .kw-weak  {background:rgba(239,68,85,.1);color:#ef4455;border:1px solid rgba(239,68,85,.22);}
     .kw-bias  {background:rgba(240,160,64,.1);color:#f0a040;border:1px solid rgba(240,160,64,.22);}
+
+  /* ── MOBILE ──────────────────────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    html,body{overflow:auto;height:auto;}
+    #layout{display:block;}
+    #sidebar{
+      position:fixed;left:-282px;top:56px;bottom:0;width:282px;
+      z-index:100;overflow-y:auto;
+      transition:left .25s cubic-bezier(.4,0,.2,1);
+    }
+    #sidebar.mob-open{left:0;}
+    #mob-backdrop{
+      display:none;position:fixed;inset:0;top:56px;
+      background:rgba(0,0,0,.55);z-index:99;
+    }
+    #mob-backdrop.open{display:block;}
+    #main-area{width:100%;padding:10px;overflow-y:auto;height:calc(100vh - 56px);}
+    #preview-panel{width:100%;}
+    #mob-menu-btn{display:flex;}
+    .lanes-row{max-height:340px;}
+    .lane{width:200px;min-width:160px;}
+  }
   </style>
 </head>
 <body>
@@ -299,6 +321,16 @@
       <a href="multimedia.html" class="nav-link active">Multi Media</a>
       <a href="about.html"      class="nav-link">About Us</a>
     </div>
+    <button id="mob-menu-btn" onclick="toggleMobSidebar()"
+            style="display:none;width:36px;height:36px;border-radius:8px;
+                   background:none;border:none;cursor:pointer;color:#7a8499;
+                   align-items:center;justify-content:center;transition:color .18s,background .18s"
+            onmouseenter="this.style.color='#f0f2f8';this.style.background='rgba(255,255,255,.05)'"
+            onmouseleave="this.style.color='#7a8499';this.style.background='none'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
     <button style="width:32px;height:32px;border-radius:8px;background:none;border:none;cursor:pointer;
                    color:#7a8499;display:flex;align-items:center;justify-content:center;transition:color .18s,background .18s"
             onmouseenter="this.style.color='#f0f2f8';this.style.background='rgba(255,255,255,.05)'"
@@ -310,6 +342,8 @@
     </button>
   </div>
 </nav>
+
+<div id="mob-backdrop" onclick="toggleMobSidebar()"></div>
 
 <div id="layout" style="position:relative;z-index:10">
 
@@ -1363,6 +1397,11 @@ function toggleModel(key) {
   }
 }
 
+function toggleMobSidebar() {
+  document.getElementById('sidebar').classList.toggle('mob-open');
+  document.getElementById('mob-backdrop').classList.toggle('open');
+}
+
 function setTime(h) {
   mmState.recencyHours = h;
   document.querySelectorAll('.time-chip').forEach(b => b.classList.toggle('on', parseInt(b.dataset.h) === h));
@@ -1957,6 +1996,11 @@ async function callRoutingAI(aiGroups, selectedMedia, topicHint, perSlot, apiKey
 async function analyzeAndRoute() {
   if (!mmState.selectedSources.length) { showError('Select at least one source.'); return; }
   if (!mmState.selectedMedia.length)   { showError('Select at least one media brand.'); return; }
+  // Close mobile sidebar so results are immediately visible
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.remove('mob-open');
+    document.getElementById('mob-backdrop').classList.remove('open');
+  }
   // Platforms are NOT required — they only create destination columns
 
   const btn = document.getElementById('mm-analyze-btn');
