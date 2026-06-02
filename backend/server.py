@@ -727,6 +727,25 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/api/health':
             self._json({'ok': True})
+        elif self.path.startswith('/api/rss'):
+            from urllib.parse import urlparse, parse_qs, unquote
+            params = parse_qs(urlparse(self.path).query)
+            url    = unquote(params.get('url', [''])[0])
+            if not url:
+                return self._error(400, 'url parameter required')
+            try:
+                r = requests.get(url, timeout=15,
+                                 headers={'User-Agent': 'Mozilla/5.0 (compatible; ChainReporter/1.0)'})
+                r.raise_for_status()
+                body = r.content
+                self.send_response(200)
+                self.send_cors()
+                self.send_header('Content-Type', r.headers.get('Content-Type', 'application/xml'))
+                self.send_header('Content-Length', len(body))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self._error(502, f'RSS fetch failed: {e}')
         else:
             self._error(404, 'Not found')
 
