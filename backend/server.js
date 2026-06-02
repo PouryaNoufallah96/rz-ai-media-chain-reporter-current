@@ -8,7 +8,7 @@ import sheetsRoutes from './routes/sheets.js';
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000' }));
+app.use(cors({ origin: process.env.FRONTEND_ORIGIN || '*' }));
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/copy',   copyRoutes);

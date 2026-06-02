@@ -1,2 +1,4 @@
-requests
-openai
+# Python 3.10+ required (uses typing.Optional, datetime, openai SDK)
+requests>=2.31.0,<3.0.0
+openai>=1.50.0,<2.0.0
+numpy>=1.24.0,<2.0.0

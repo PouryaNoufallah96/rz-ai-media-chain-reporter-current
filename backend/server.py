@@ -18,6 +18,35 @@ import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 import requests
+from datetime import datetime as _datetime, date as _date
+
+try:
+    from filtering.pipeline import run_pipeline as _run_pipeline
+    _FILTERING_AVAILABLE = True
+except ImportError as _e:
+    print(f'[WARN] filtering package not available: {_e}', file=sys.stderr)
+    _FILTERING_AVAILABLE = False
+
+try:
+    from filtering.deepseek_pipeline import run_deepseek_pipeline as _run_deepseek_pipeline
+    _DEEPSEEK_FILTER_AVAILABLE = True
+except ImportError as _e2:
+    print(f'[WARN] deepseek_pipeline not available: {_e2}', file=sys.stderr)
+    _DEEPSEEK_FILTER_AVAILABLE = False
+
+# ── JSON helper: handle datetime + numpy scalars ──────────────────────────────
+def _json_default(obj):
+    if isinstance(obj, (_datetime, _date)):
+        return obj.isoformat()
+    try:
+        import numpy as _np
+        if isinstance(obj, _np.integer): return int(obj)
+        if isinstance(obj, _np.floating): return float(obj)
+        if isinstance(obj, _np.ndarray): return obj.tolist()
+    except ImportError:
+        pass
+    raise TypeError(f'Object of type {type(obj).__name__} is not JSON serializable')
+
 
 # ── Load .env ──────────────────────────────────────────────────────────────────
 ENV_PATH = Path(__file__).parent / '.env'
@@ -31,7 +60,7 @@ if ENV_PATH.exists():
 OPENAI_KEY      = os.environ.get('OPENAI_API_KEY', '')
 SCRIPT_URL      = os.environ.get('GOOGLE_APPS_SCRIPT_URL', '')
 PORT            = int(os.environ.get('PORT', 3001))
-ORIGIN          = os.environ.get('FRONTEND_ORIGIN', 'http://localhost:3000')
+ORIGIN          = os.environ.get('FRONTEND_ORIGIN', '*')
 X_API_KEY       = os.environ.get('X_API_KEY', '')
 X_API_SECRET    = os.environ.get('X_API_SECRET', '')
 X_TOKEN         = os.environ.get('X_ACCESS_TOKEN', '')
@@ -54,12 +83,12 @@ EDITORIAL_MODELS = {
         'id':          'openai/gpt-5.5',
         'display':     'GPT-5.5',
         'temperature': 0.30,
-        'max_tokens':  5500,
+        'max_tokens':  16000,
         'api':         'openrouter',
     },
     'gemini': {
         'id':          'google/gemini-3.1-pro-preview',
-        'display':     'Gemini 3.1 Pro',
+        'display':     'Gemini 3.1 Pro Preview',
         'temperature': 0.30,
         'max_tokens':  16000,
         'api':         'openrouter',
@@ -75,7 +104,14 @@ EDITORIAL_MODELS = {
         'id':          'deepseek/deepseek-v4-flash',
         'display':     'DeepSeek V4 Flash',
         'temperature': 0.30,
-        'max_tokens':  8000,
+        'max_tokens':  16000,
+        'api':         'openrouter',
+    },
+    'grok': {
+        'id':          'x-ai/grok-4.3',
+        'display':     'Grok 4.3',
+        'temperature': 0.30,
+        'max_tokens':  16000,
         'api':         'openrouter',
     },
 }
@@ -400,7 +436,10 @@ def handle_twitter_post(body):
 def _repair_json(raw):
     """Strip markdown fences, then parse JSON; if truncated, salvage partial content."""
     # Strip <think>...</think> reasoning blocks (DeepSeek and other reasoning models)
-    s = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+    s = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL)
+    # Also handle unclosed <think> blocks (model cut off mid-reasoning)
+    s = re.sub(r'<think>.*$', '', s, flags=re.DOTALL)
+    s = s.strip()
     raw = s if s else raw
     # Strip ```json ... ``` or ``` ... ``` wrappers
     s = raw.strip()
@@ -449,6 +488,8 @@ def _repair_json(raw):
             except json.JSONDecodeError:
                 pass
 
+    preview = raw[:300].replace('\n', ' ')
+    print(f'[JSON REPAIR FAILED] len={len(raw)} preview: {preview}', file=sys.stderr)
     raise ValueError(f'Could not parse or repair JSON response (len={len(raw)})')
 
 
@@ -463,7 +504,7 @@ def _get_openrouter_client():
             base_url='https://openrouter.ai/api/v1',
             api_key=OPENROUTER_KEY,
             default_headers={
-                'HTTP-Referer': 'http://localhost:3000',
+                'HTTP-Referer': ORIGIN if ORIGIN != '*' else 'https://chainreporter.app',
                 'X-Title':      'ChainReporter Editorial AI',
             },
             timeout=180,
@@ -515,11 +556,43 @@ def handle_editorial_select(body):
     sel_media      = body.get('selectedMedia', [])
     sel_plats      = body.get('selectedPlatforms', ['X', 'Telegram', 'Instagram'])
     topics         = body.get('topics', '').strip()
+    test_mode      = body.get('testMode', False)
 
     if not shortlist:
         raise ValueError('shortlist is empty')
     if not OPENROUTER_KEY:
         raise ValueError('OPENROUTER_API_KEY not set in .env')
+
+    if test_mode:
+        brand_list = ', '.join(f'"{m}"' for m in sel_media)
+        lines = '\n'.join(
+            f'[{a["input_index"]}] {a.get("title","")} — {a.get("source","")}'
+            for a in shortlist
+        )
+        system_prompt = (
+            'You are a test assistant. Rewrite each article in very short format and return ONLY valid JSON.\n'
+            f'Brands: [{brand_list}]. For each brand pick 1 article and rewrite it very briefly.\n'
+            'Schema: {"brands":{"<brand>":[{"input_index":<N>,"platform":"X","title":"<short title>",'
+            '"source":"<src>","source_url":"#","selection_reason":"test","copy":"<one sentence>",'
+            '"hashtags":["#Test"],"suitability_score":80,"impact_score":80,"virality_score":80,"confidence_score":80}]}}'
+        )
+        user_prompt = f'Articles:\n{lines}'
+        sel_models  = body.get('selectedModels', list(EDITORIAL_MODELS.keys()))
+        active_models = {k: v for k, v in EDITORIAL_MODELS.items() if k in sel_models}
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        results = {}
+        # Thinking models (Gemini 2.5 Pro, etc.) consume tokens on internal reasoning
+        # before generating output, so they need a higher cap even in test mode.
+        THINKING_MODELS = {'gemini'}
+        with ThreadPoolExecutor(max_workers=len(active_models)) as pool:
+            futures = {
+                pool.submit(_editorial_call_one, k, {**v, 'max_tokens': 4000 if k in THINKING_MODELS else 800}, system_prompt, user_prompt): k
+                for k, v in active_models.items()
+            }
+            for fut in as_completed(futures):
+                key, data = fut.result()
+                results[key] = data
+        return results
 
     # Build compact article list for the prompt
     lines = []
@@ -603,6 +676,39 @@ def handle_editorial_select(body):
     return results
 
 
+# ── OpenAI Embedding filter pipeline handler ──────────────────────────────────
+def handle_filter_pipeline(body):
+    if not _FILTERING_AVAILABLE:
+        raise ValueError('filtering package not installed (pip install numpy)')
+    articles       = body.get('articles', [])
+    selected_media = body.get('selectedMedia', [])
+    topics         = body.get('topics', '')
+    recency_hours  = int(body.get('recencyHours', 24))
+    if not articles:
+        raise ValueError('articles array is empty')
+    if not selected_media:
+        raise ValueError('selectedMedia is empty')
+    return _run_pipeline(articles, selected_media, topics, recency_hours)
+
+
+def handle_deepseek_filter(body):
+    if not _DEEPSEEK_FILTER_AVAILABLE:
+        raise ValueError('deepseek_pipeline not available')
+    articles       = body.get('articles', [])
+    selected_media = body.get('selectedMedia', [])
+    topics         = body.get('topics', '')
+    recency_hours  = int(body.get('recencyHours', 24))
+    if not articles:
+        raise ValueError('articles array is empty')
+    if not selected_media:
+        raise ValueError('selectedMedia is empty')
+    return _run_deepseek_pipeline(
+        articles, selected_media, topics, recency_hours,
+        _openrouter_chat=openrouter_chat,
+        _repair_json=_repair_json,
+    )
+
+
 # ── HTTP Request Handler ───────────────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -652,6 +758,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(handle_twitter_post(body))
             elif path == '/api/ai/editorial-select':
                 self._json(handle_editorial_select(body))
+            elif path == '/api/filter/pipeline':
+                self._json(handle_filter_pipeline(body))
+            elif path == '/api/filter/deepseek':
+                self._json(handle_deepseek_filter(body))
             elif path == '/api/telegram/post':
                 self._json(handle_telegram_post(body))
             else:
@@ -665,7 +775,7 @@ class Handler(BaseHTTPRequestHandler):
             self._error(500, str(e))
 
     def _json(self, data, status=200):
-        body = json.dumps(data).encode()
+        body = json.dumps(data, default=_json_default).encode()
         self.send_response(status)
         self.send_cors()
         self.send_header('Content-Type', 'application/json')

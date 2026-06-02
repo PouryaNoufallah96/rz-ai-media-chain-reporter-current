@@ -163,8 +163,13 @@
       background:rgba(10,13,20,.78);overflow:hidden;flex-shrink:0}
     .section-header{display:flex;align-items:center;gap:10px;padding:11px 16px;
       border-bottom:1px solid rgba(255,255,255,.06)}
-    .lanes-row{display:flex;min-height:230px;max-height:310px}
-    .lane{flex:none;width:220px;min-width:120px;border-right:1px solid rgba(255,255,255,.05);display:flex;
+    .lanes-row{display:flex;min-height:260px;max-height:420px;
+      overflow-x:auto;overflow-y:hidden;}
+    .lanes-row::-webkit-scrollbar{height:5px}
+    .lanes-row::-webkit-scrollbar-track{background:rgba(255,255,255,.03)}
+    .lanes-row::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:3px}
+    .lanes-row::-webkit-scrollbar-thumb:hover{background:rgba(0,212,160,.45)}
+    .lane{flex:none;width:240px;min-width:160px;border-right:1px solid rgba(255,255,255,.05);display:flex;
       flex-direction:column;transition:background .15s}
     .lane:last-child{border-right:none}
     .lane.drag-over{background:rgba(0,212,160,.05)}
@@ -173,7 +178,7 @@
     .lane-resizer:hover,.lane-resizer.active{background:rgba(0,212,160,.35)}
     .lane-header{flex-shrink:0;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05);
       display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.18)}
-    .lane-cards{flex:1;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:6px}
+    .lane-cards{flex:1;overflow-y:auto;overflow-x:hidden;padding:7px;display:flex;flex-direction:column;gap:6px}
     .sbadge{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;
       padding:3px 7px;border-radius:5px;white-space:nowrap}
     .sb-ready    {background:rgba(0,212,160,.1);color:#00d4a0;border:1px solid rgba(0,212,160,.25)}
@@ -458,6 +463,61 @@
         </div>
       </div>
 
+      <!-- ⑥ Filter Engine -->
+      <div>
+        <label style="display:block;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#7a8499;margin-bottom:6px;">⑥ Filter Engine</label>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+
+          <div id="fe-preprocess" onclick="setFilterMode('preprocess')"
+               style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;
+                      border:1px solid rgba(0,212,160,.55);background:rgba(0,212,160,.12);transition:border .18s,background .18s;">
+            <div style="width:22px;height:22px;border-radius:6px;background:rgba(0,212,160,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;font-weight:800;color:#00d4a0;">PP</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">Pre-Process</div>
+              <div style="font-size:10px;color:#7a8499;">Local ML model · no API cost</div>
+            </div>
+            <div id="chk-fe-preprocess" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:#00d4a0;display:flex;align-items:center;justify-content:center;">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#07090e" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+
+          <div id="fe-openai" onclick="setFilterMode('openai_embedding')"
+               style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;
+                      border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);transition:border .18s,background .18s;">
+            <div style="width:22px;height:22px;border-radius:6px;background:rgba(16,163,127,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;font-weight:800;color:#10a37f;">OA</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">OpenAI Embedding</div>
+              <div style="font-size:10px;color:#7a8499;">text-embedding-3-small · backend</div>
+            </div>
+            <div id="chk-fe-openai" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
+          </div>
+
+          <div id="fe-deepseek" onclick="setFilterMode('deepseek_preprocess')"
+               style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;
+                      border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);transition:border .18s,background .18s;">
+            <div style="width:22px;height:22px;border-radius:6px;background:rgba(34,211,238,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;font-weight:800;color:#22d3ee;">DS</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">DeepSeek Pre-Process</div>
+              <div style="font-size:10px;color:#7a8499;">DeepSeek V4 Flash · routing AI</div>
+            </div>
+            <div id="chk-fe-deepseek" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Test Version Toggle -->
+      <div>
+        <div onclick="setFilterMode('test')" id="test-mode-row" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);transition:border .18s,background .18s;">
+          <div style="width:22px;height:22px;border-radius:6px;background:rgba(240,160,64,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;">⚡</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;color:#f0a040;">Test Version</div>
+            <div style="font-size:10px;color:#7a8499;">Verify API + models with minimal tokens</div>
+          </div>
+          <div id="chk-test-mode" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
+        </div>
+      </div>
+
       <!-- ⑥ AI Models -->
       <div>
         <label style="display:block;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#7a8499;margin-bottom:4px;">⑥ AI Editorial Models</label>
@@ -478,7 +538,7 @@
           <div class="toggle-row" id="model-row-gemini" onclick="toggleModel('gemini')" style="cursor:pointer;border-color:rgba(66,133,244,.55);background:rgba(66,133,244,.08);">
             <div style="width:22px;height:22px;border-radius:6px;background:rgba(66,133,244,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:7px;font-weight:800;color:#4285f4;">GE</div>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">Gemini 3.1 Pro <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(66,133,244,.15);color:#4285f4;margin-left:3px;">Google</span></div>
+              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">Gemini 3.1 Pro Preview <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(66,133,244,.15);color:#4285f4;margin-left:3px;">Google</span></div>
               <div style="font-size:10px;color:#7a8499;">Strong reasoning · multimodal</div>
             </div>
             <div id="chk-model-gemini" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:#4285f4;display:flex;align-items:center;justify-content:center;">
@@ -504,6 +564,15 @@
               <div style="font-size:10px;color:#7a8499;">Fast · cost-efficient · strong reasoning</div>
             </div>
             <div id="chk-model-deepseek" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
+          </div>
+
+          <div class="toggle-row" id="model-row-grok" onclick="toggleModel('grok')" style="cursor:pointer;border-color:rgba(239,68,85,.55);background:rgba(239,68,85,.08);">
+            <div style="width:22px;height:22px;border-radius:6px;background:rgba(239,68,85,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:7px;font-weight:800;color:#ef4455;">GR</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">Grok 4.3 <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(239,68,85,.15);color:#ef4455;margin-left:3px;">xAI</span></div>
+              <div style="font-size:10px;color:#7a8499;">xAI · real-time knowledge</div>
+            </div>
+            <div id="chk-model-grok" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
           </div>
 
         </div>
@@ -685,7 +754,9 @@
 </div>
 
 <script>
-const API_BASE = 'http://localhost:3001';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:3001'
+  : `http://${window.location.hostname}:3001`;
 
 const MM_SOURCES = {
   'CoinDesk':'https://www.coindesk.com/arc/outboundfeeds/rss/',
@@ -1165,13 +1236,15 @@ const mmState = {
   selectedPlatforms: ['X','Telegram','Instagram'],
   selectedSources:   ['CoinDesk','Cointelegraph','The Block'],
   recencyHours: 24,
+  filterMode: 'preprocess',   // 'preprocess' | 'openai_embedding' | 'deepseek_preprocess' | 'test'
   routed:        buildEmptyRouted(),
   activeCard:    null,
   editorial:     null,   // raw editorial AI results
   lastShortlist: [],
+  testMode: false,
   // Editorial mode lane state
-  selectedModels: ['gpt', 'gemini', 'claude'],
-  modelLanes:    { gpt: {}, gemini: {}, claude: {}, deepseek: {} },
+  selectedModels: ['gpt', 'gemini', 'claude', 'deepseek', 'grok'],
+  modelLanes:    { gpt: {}, gemini: {}, claude: {}, deepseek: {}, grok: {} },
   platformLanes: {},     // { brand: { X: [], Telegram: [], Instagram: [] } }
 };
 
@@ -1270,6 +1343,7 @@ function togglePlatform(p) {
   renderAllSections();
 }
 
+
 function toggleModel(key) {
   const meta = EDITORIAL_MODEL_META[key];
   if (!meta) return;
@@ -1292,6 +1366,38 @@ function toggleModel(key) {
 function setTime(h) {
   mmState.recencyHours = h;
   document.querySelectorAll('.time-chip').forEach(b => b.classList.toggle('on', parseInt(b.dataset.h) === h));
+}
+
+function setFilterMode(mode) {
+  mmState.filterMode = mode;
+  mmState.testMode   = (mode === 'test');
+
+  const CHECK = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#07090e" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  const BASE  = 'cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;transition:border .18s,background .18s;';
+  const OFF_ROW = BASE + 'border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);';
+  const OFF_CHK = 'width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;';
+
+  const options = [
+    { key: 'preprocess',          rowId: 'fe-preprocess',  chkId: 'chk-fe-preprocess', color: '#00d4a0' },
+    { key: 'openai_embedding',   rowId: 'fe-openai',      chkId: 'chk-fe-openai',     color: '#10a37f' },
+    { key: 'deepseek_preprocess',rowId: 'fe-deepseek',    chkId: 'chk-fe-deepseek',   color: '#22d3ee' },
+    { key: 'test',               rowId: 'test-mode-row',  chkId: 'chk-test-mode',     color: '#f0a040' },
+  ];
+
+  options.forEach(function(opt) {
+    var row = document.getElementById(opt.rowId);
+    var chk = document.getElementById(opt.chkId);
+    if (!row || !chk) return;
+    if (opt.key === mode) {
+      row.setAttribute('style', BASE + 'border:1px solid ' + opt.color + '88;background:' + opt.color + '1a;');
+      chk.setAttribute('style', 'width:14px;height:14px;border-radius:4px;flex-shrink:0;background:' + opt.color + ';display:flex;align-items:center;justify-content:center;');
+      chk.innerHTML = CHECK;
+    } else {
+      row.setAttribute('style', OFF_ROW);
+      chk.setAttribute('style', OFF_CHK);
+      chk.innerHTML = '';
+    }
+  });
 }
 
 
@@ -1886,55 +1992,149 @@ async function analyzeAndRoute() {
     const sourceCounts = {};
     srcs.forEach(s => { sourceCounts[s] = 0; });
     recent.forEach(a => { if (sourceCounts[a.source] !== undefined) sourceCounts[a.source]++; });
-    showFetchSummary(sourceCounts, recent.length, mmState.recencyHours);
+    showFetchSummary(sourceCounts, recent.length, mmState.recencyHours, mmState.filterMode);
 
-    // ── Phase 2: Pre-Scoring (media criteria only — no platform influence) ──
-    // ── Semantic embedding (waits for model if still loading) ──
-    setProgress(45, `Loading semantic model…`);
-    if (window._semRouter?._initPromise) await window._semRouter._initPromise;
-    setProgress(50, `Embedding ${recent.length} articles…`);
-    if (window._semRouter?.embedArticles) {
-      await window._semRouter.embedArticles(recent);
-    }
+    const topics = mmGetTopics();
 
-    setProgress(58, `Pre-scoring ${recent.length} articles…`);
-    await new Promise(r => setTimeout(r, 20));
-
-    const topics   = mmGetTopics();
-    const preResult = preScore(recent, mmState.selectedMedia, topics);
-    const { shortlisted, allTracked } = preResult;
-    if (!shortlisted.length) throw new Error('All articles were filtered by pre-scoring. Try a wider time range or more sources.');
-
-    // Mark all-articles-before-recency as too_old for the report
+    // Mark articles outside recency window for the report
     const tooOldArticles = allArticles
       .filter(a => a.pubDate && (() => { const t = Date.parse(a.pubDate); return !isNaN(t) && t < Date.now() - mmState.recencyHours * 3600000; })())
       .map(a => ({ ...a, _pipelineStatus: 'too_old', _scores: null, _keywords: null, _routing: null }));
 
-    // ── Phase 3: Pre-score panel ──
-    showPreScorePanel(preResult, mmState.selectedMedia);
-    setProgress(62, `Sending ${shortlisted.length} articles to ${mmState.selectedModels.length} AI editor${mmState.selectedModels.length === 1 ? '' : 's'} in parallel…`);
+    let shortlistPayload;
+    let allTracked;
+    let preResult = null;
 
-    // ── Phase 4: Editorial AI — 3 models independently select their best 5 ──
-    const shortlistPayload = shortlisted.map((a, i) => ({
-      input_index: i,
-      title:       a.title,
-      source:      a.source,
-      link:        a.link || '',
-      desc:        (a.desc || '').slice(0, 220),
-      pubDate:     a.pubDate || '',
-      scores: {
-        final:      Math.round(a._scores?.final      || 0),
-        virality:   Math.round(a._scores?.virality   || 0),
-        freshness:  Math.round(a._scores?.freshness  || 0),
-        authority:  Math.round(a._scores?.authority  || 0),
-        userTopic:  Math.round(a._scores?.userTopic  || 0),
-        confidence: Math.round(a._scores?.confidence || 0),
-      },
-      routing: {
-        primary_media:   a._routing?.primary_media   || '',
-        secondary_media: a._routing?.secondary_media || '',
-      },
-    }));
+    if (mmState.filterMode === 'openai_embedding') {
+      // ── OpenAI Embedding path ──────────────────────────────────────────────
+      setProgress(48, `Running OpenAI Embedding pipeline on ${recent.length} articles…`);
+      const filterRes = await fetch(`${API_BASE}/api/filter/pipeline`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          articles:      recent,
+          selectedMedia: mmState.selectedMedia,
+          topics,
+          recencyHours:  mmState.recencyHours,
+        }),
+      });
+      if (!filterRes.ok) {
+        const e = await filterRes.json().catch(() => ({}));
+        throw new Error(e?.error || `Filter pipeline failed (${filterRes.status})`);
+      }
+      const filterData = await filterRes.json();
+      if (!filterData.shortlist?.length)
+        throw new Error('OpenAI Embedding pipeline: no articles passed filtering. Try a wider time range or more sources.');
+
+      // shortlist items already have input_index, scores, routing set by backend
+      shortlistPayload = filterData.shortlist;
+      allTracked       = filterData.all_tracked || [];
+      mmState.lastShortlist = shortlistPayload;   // indexed by input_index for lane rendering
+
+      preResult = {
+        rejected: {
+          duplicate:  (filterData.stats?.dropped_dup_cheap   || 0) + (filterData.stats?.dropped_clustered || 0),
+          noMediaFit: filterData.stats?.no_media_fit  || 0,
+          lowScore:   filterData.stats?.cap_exceeded  || 0,
+        },
+        passed:      filterData.stats?.embedded || 0,
+        shortlisted: shortlistPayload,
+        allTracked,
+      };
+
+      setProgress(62, `Sending ${shortlistPayload.length} articles to ${mmState.selectedModels.length} AI editor${mmState.selectedModels.length === 1 ? '' : 's'} in parallel…`);
+
+    } else if (mmState.filterMode === 'deepseek_preprocess') {
+      // ── DeepSeek Pre-Process path ──────────────────────────────────────────
+      setProgress(48, `Sending ${recent.length} articles to DeepSeek V4 Flash…`);
+      const dsRes = await fetch(`${API_BASE}/api/filter/deepseek`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          articles:      recent,
+          selectedMedia: mmState.selectedMedia,
+          topics,
+          recencyHours:  mmState.recencyHours,
+        }),
+      });
+      if (!dsRes.ok) {
+        const e = await dsRes.json().catch(() => ({}));
+        throw new Error(e?.error || `DeepSeek filter failed (${dsRes.status})`);
+      }
+      const dsData = await dsRes.json();
+      if (!dsData.shortlist?.length)
+        throw new Error('DeepSeek Pre-Process: no articles passed filtering. Try a wider time range or more sources.');
+
+      shortlistPayload      = dsData.shortlist;
+      allTracked            = dsData.all_tracked || [];
+      mmState.lastShortlist = shortlistPayload;
+
+      preResult = {
+        rejected: {
+          duplicate:  dsData.stats?.dropped_dup_cheap || 0,
+          noMediaFit: 0,
+          lowScore:   0,
+        },
+        passed:      dsData.stats?.sent_to_deepseek || 0,
+        shortlisted: shortlistPayload,
+        allTracked,
+      };
+
+      setProgress(62, `Sending ${shortlistPayload.length} articles to ${mmState.selectedModels.length} AI editor${mmState.selectedModels.length === 1 ? '' : 's'} in parallel…`);
+
+    } else {
+      // ── Pre-Process path (existing) ────────────────────────────────────────
+      setProgress(45, `Loading semantic model…`);
+      if (window._semRouter?._initPromise) await window._semRouter._initPromise;
+      setProgress(50, `Embedding ${recent.length} articles…`);
+      if (window._semRouter?.embedArticles) {
+        await window._semRouter.embedArticles(recent);
+      }
+
+      setProgress(58, `Pre-scoring ${recent.length} articles…`);
+      await new Promise(r => setTimeout(r, 20));
+
+      preResult = preScore(recent, mmState.selectedMedia, topics);
+      allTracked = preResult.allTracked;
+      const { shortlisted } = preResult;
+      if (!shortlisted.length) throw new Error('All articles were filtered by pre-scoring. Try a wider time range or more sources.');
+
+      showPreScorePanel(preResult, mmState.selectedMedia);
+      setProgress(62, `Sending ${shortlisted.length} articles to ${mmState.selectedModels.length} AI editor${mmState.selectedModels.length === 1 ? '' : 's'} in parallel…`);
+
+      // Test-mode article capping
+      const isTestPP = mmState.testMode;
+      let articlesForAI = shortlisted;
+      if (isTestPP) {
+        const seen = new Set(); const picked = [];
+        for (const brand of mmState.selectedMedia) {
+          shortlisted.filter(a => a._routing?.primary_media === brand).slice(0, 3)
+            .forEach(a => { if (!seen.has(a.title)) { seen.add(a.title); picked.push(a); } });
+        }
+        articlesForAI = picked.length ? picked : shortlisted.slice(0, 3);
+      }
+      shortlistPayload = articlesForAI.map((a, i) => ({
+        input_index: i,
+        title:       isTestPP ? a.title.split(' ').slice(0, 6).join(' ') : a.title,
+        source:      a.source,
+        link:        a.link || '',
+        desc:        isTestPP ? (a.desc || '').split(' ').slice(0, 10).join(' ') : (a.desc || '').slice(0, 220),
+        pubDate:     a.pubDate || '',
+        scores: {
+          final:      Math.round(a._scores?.final      || 0),
+          virality:   Math.round(a._scores?.virality   || 0),
+          freshness:  Math.round(a._scores?.freshness  || 0),
+          authority:  Math.round(a._scores?.authority  || 0),
+          userTopic:  Math.round(a._scores?.userTopic  || 0),
+          confidence: Math.round(a._scores?.confidence || 0),
+        },
+        routing: {
+          primary_media:   a._routing?.primary_media   || '',
+          secondary_media: a._routing?.secondary_media || '',
+        },
+      }));
+      mmState.lastShortlist = preResult.shortlisted;
+    }
 
     const editRes = await fetch(`${API_BASE}/api/ai/editorial-select`, {
       method:  'POST',
@@ -1945,14 +2145,14 @@ async function analyzeAndRoute() {
         selectedPlatforms: mmState.selectedPlatforms,
         selectedModels:    mmState.selectedModels,
         topics,
+        testMode:          mmState.testMode,
       }),
     });
     if (!editRes.ok) {
       const e = await editRes.json().catch(() => ({}));
       throw new Error(e?.error || `Editorial AI failed (${editRes.status})`);
     }
-    mmState.editorial     = await editRes.json();
-    mmState.lastShortlist = shortlisted;
+    mmState.editorial = await editRes.json();
 
     // Populate model lanes from editorial results — 5 articles per brand per model
     mmState.modelLanes = {};
@@ -2025,9 +2225,10 @@ async function analyzeAndRoute() {
       fetchedTotal:     allArticles.length,
       tooOld:           tooOldCount,
       afterRecency:     recent.length,
-      rejected:         preResult.rejected,
-      shortlistedCount: shortlisted.length,
+      rejected:         preResult?.rejected || { duplicate: 0, noMediaFit: 0, lowScore: 0 },
+      shortlistedCount: shortlistPayload.length,
       perMedia,
+      filterMode:       mmState.filterMode,
       allArticles:      [...tooOldArticles, ...allTracked],
     };
 
@@ -2069,7 +2270,14 @@ async function analyzeAndRoute() {
 }
 
 // ── FETCH SUMMARY ──
-function showFetchSummary(sourceCounts, total, hours) {
+function showFetchSummary(sourceCounts, total, hours, filterMode) {
+  const FILTER_LABELS = {
+    preprocess:          'Running pre-scoring engine — filtering &amp; ranking articles…',
+    openai_embedding:    'Running OpenAI Embedding pipeline — sending to backend…',
+    deepseek_preprocess: 'Sending articles to DeepSeek V4 Flash — routing &amp; ranking…',
+    test:                'Running pre-scoring engine (test mode)…',
+  };
+  const footerLabel = FILTER_LABELS[filterMode] || FILTER_LABELS.preprocess;
   const container = document.getElementById('media-sections');
   const entries = Object.entries(sourceCounts).sort((a,b) => b[1] - a[1]);
   const maxCount = Math.max(...entries.map(e => e[1]), 1);
@@ -2132,7 +2340,7 @@ function showFetchSummary(sourceCounts, total, hours) {
       <div style="padding:10px 18px;border-top:1px solid rgba(255,255,255,.05);
                   display:flex;align-items:center;gap:8px;">
         <span class="spinner" style="border-color:rgba(155,114,245,.2);border-top-color:#9b72f5;width:10px;height:10px;"></span>
-        <span style="font-size:11px;color:#7a8499;">Running pre-scoring engine — filtering &amp; ranking articles…</span>
+        <span style="font-size:11px;color:#7a8499;">${footerLabel}</span>
       </div>
     </div>`;
 }
@@ -2256,9 +2464,10 @@ function renderAllSections() {
 // ── EDITORIAL MODEL METADATA ──────────────────────────────────────────────────
 const EDITORIAL_MODEL_META = {
   gpt:      { display: 'GPT-5.5',          color: '#10a37f', badge: 'OpenAI',    desc: 'Best general-purpose editorial AI' },
-  gemini:   { display: 'Gemini 3.1 Pro',   color: '#4285f4', badge: 'Google',    desc: 'Strong reasoning · multimodal' },
+  gemini:   { display: 'Gemini 3.1 Pro Preview',   color: '#4285f4', badge: 'Google',    desc: 'Strong reasoning · multimodal' },
   claude:   { display: 'Claude Opus 4.7',  color: '#d97706', badge: 'Anthropic', desc: 'Top reasoning benchmark score' },
   deepseek: { display: 'DeepSeek V4 Flash',color: '#22d3ee', badge: 'DeepSeek',  desc: 'Fast · cost-efficient · strong reasoning' },
+  grok:     { display: 'Grok 4.3',         color: '#ef4455', badge: 'xAI',       desc: 'xAI · real-time knowledge' },
 };
 
 // ── EDITORIAL BRAND LAYOUT (one section per brand, 3 model lanes + platform lanes each) ──
@@ -2315,9 +2524,8 @@ function buildBrandEditorialSection(brand) {
 function initLaneResizers(lanesRow) {
   const lanes = Array.from(lanesRow.querySelectorAll(':scope > .lane'));
   if (lanes.length < 2) return;
-  const totalW = lanesRow.offsetWidth || lanesRow.clientWidth;
-  const eachW  = Math.floor(totalW / lanes.length);
-  lanes.forEach(l => { l.style.flex = 'none'; l.style.width = eachW + 'px'; });
+  // Keep each lane at its CSS default width — don't squeeze to fit visible area
+  lanes.forEach(l => { l.style.flex = 'none'; });
   lanes.forEach((lane, i) => {
     if (i === lanes.length - 1) return;
     const resizer = document.createElement('div');
@@ -2333,8 +2541,9 @@ function initLaneResizers(lanesRow) {
       resizer.classList.add('active');
       const onMove = ev => {
         const dx = ev.clientX - startX;
-        leftLane.style.width  = Math.max(120, leftW  + dx) + 'px';
-        rightLane.style.width = Math.max(120, rightW - dx) + 'px';
+        // Only constrain the left lane minimum; right lane grows freely (no right-side clamp)
+        leftLane.style.width  = Math.max(160, leftW  + dx) + 'px';
+        rightLane.style.width = Math.max(160, rightW - dx) + 'px';
       };
       const onUp = () => {
         resizer.classList.remove('active');
