@@ -2140,11 +2140,14 @@ async function analyzeAndRoute() {
 
     } else {
       // ── Pre-Process path (existing) ────────────────────────────────────────
-      setProgress(45, `Loading semantic model…`);
-      if (window._semRouter?._initPromise) await window._semRouter._initPromise;
-      setProgress(50, `Embedding ${recent.length} articles…`);
-      if (window._semRouter?.embedArticles) {
-        await window._semRouter.embedArticles(recent);
+      if (mmState.filterMode !== 'test') {
+        // Test Version skips the 25 MB semantic model — falls back to keyword scoring
+        setProgress(45, `Loading semantic model…`);
+        if (window._semRouter?._initPromise) await window._semRouter._initPromise;
+        setProgress(50, `Embedding ${recent.length} articles…`);
+        if (window._semRouter?.embedArticles) {
+          await window._semRouter.embedArticles(recent);
+        }
       }
 
       setProgress(58, `Pre-scoring ${recent.length} articles…`);
