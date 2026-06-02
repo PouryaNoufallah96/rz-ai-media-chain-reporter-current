@@ -268,24 +268,40 @@
 
   /* ── MOBILE ──────────────────────────────────────────────────────────────── */
   @media (max-width: 768px) {
-    html,body{overflow:auto;height:auto;}
-    #layout{display:block;}
+    /* Allow natural page scrolling */
+    html,body{overflow:auto !important;height:auto !important;}
+    /* Stack sidebar above main content */
+    #layout{display:flex !important;flex-direction:column !important;height:auto !important;}
+    /* Sidebar: full-width, normal flow — no drawer behaviour */
     #sidebar{
-      position:fixed;left:-282px;top:56px;bottom:0;width:282px;
-      z-index:100;overflow-y:auto;
-      transition:left .25s cubic-bezier(.4,0,.2,1);
+      width:100% !important;position:static !important;
+      border-right:none;border-bottom:1px solid rgba(255,255,255,.06);
+      overflow-y:visible !important;flex-shrink:unset !important;
+      height:auto !important;left:unset !important;
     }
-    #sidebar.mob-open{left:0;}
+    /* Main area: full width, natural height */
+    #main-area{width:100% !important;height:auto !important;overflow-y:visible !important;padding:10px !important;}
+    /* Preview panel: full screen width */
+    #preview-panel{width:100% !important;}
+    /* Show hamburger — toggles nav links */
+    #mob-menu-btn{display:flex !important;}
+    /* Mobile nav links: hidden by default */
+    #mob-nav-links{
+      display:none !important;flex-direction:column !important;
+      padding:8px 16px 12px;gap:2px;
+      background:rgba(7,9,14,.98);
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    #mob-nav-links.open{display:flex !important;}
+    /* Backdrop for nav overlay */
     #mob-backdrop{
       display:none;position:fixed;inset:0;top:56px;
-      background:rgba(0,0,0,.55);z-index:99;
+      background:rgba(0,0,0,.4);z-index:99;
     }
     #mob-backdrop.open{display:block;}
-    #main-area{width:100%;padding:10px;overflow-y:auto;height:calc(100vh - 56px);}
-    #preview-panel{width:100%;}
-    #mob-menu-btn{display:flex;}
-    .lanes-row{max-height:340px;}
-    .lane{width:200px;min-width:160px;}
+    /* Lane rows: horizontal swipe only */
+    .lanes-row{overflow-x:auto !important;overflow-y:hidden !important;-webkit-overflow-scrolling:touch;max-height:400px;}
+    .lane{width:280px !important;min-width:280px !important;}
   }
   </style>
 </head>
@@ -316,12 +332,12 @@
         <span style="font-size:11px;font-weight:700;color:#00d4a0;letter-spacing:.04em;">AI</span>
       </div>
     </a>
-    <div class="hidden md:flex items-center gap-0.5">
+    <div id="mob-nav-links" class="hidden md:flex items-center gap-0.5">
       <a href="index.html"      class="nav-link">Create News</a>
       <a href="multimedia.html" class="nav-link active">Multi Media</a>
       <a href="about.html"      class="nav-link">About Us</a>
     </div>
-    <button id="mob-menu-btn" onclick="toggleMobSidebar()"
+    <button id="mob-menu-btn" onclick="toggleMobNav()"
             style="display:none;width:36px;height:36px;border-radius:8px;
                    background:none;border:none;cursor:pointer;color:#7a8499;
                    align-items:center;justify-content:center;transition:color .18s,background .18s"
@@ -1397,8 +1413,8 @@ function toggleModel(key) {
   }
 }
 
-function toggleMobSidebar() {
-  document.getElementById('sidebar').classList.toggle('mob-open');
+function toggleMobNav() {
+  document.getElementById('mob-nav-links').classList.toggle('open');
   document.getElementById('mob-backdrop').classList.toggle('open');
 }
 
@@ -1996,11 +2012,6 @@ async function callRoutingAI(aiGroups, selectedMedia, topicHint, perSlot, apiKey
 async function analyzeAndRoute() {
   if (!mmState.selectedSources.length) { showError('Select at least one source.'); return; }
   if (!mmState.selectedMedia.length)   { showError('Select at least one media brand.'); return; }
-  // Close mobile sidebar so results are immediately visible
-  if (window.innerWidth <= 768) {
-    document.getElementById('sidebar').classList.remove('mob-open');
-    document.getElementById('mob-backdrop').classList.remove('open');
-  }
   // Platforms are NOT required — they only create destination columns
 
   const btn = document.getElementById('mm-analyze-btn');
