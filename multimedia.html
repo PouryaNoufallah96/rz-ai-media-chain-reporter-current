@@ -3416,21 +3416,13 @@ async function previewApprove() {
     });
     setCardStatus('approved');
 
-    // Post to platform if this card is in a platform lane
-    if (card.platform === 'Telegram') {
-      btn.textContent = 'Posting to Telegram…';
-      try {
-        await sendToTelegram(card, card._generatedImageB64 || null);
-        btn.textContent = '✓ Posted to Telegram';
-      } catch (tgErr) {
-        console.warn('Telegram post error:', tgErr.message);
-        btn.textContent = `✗ Telegram failed: ${tgErr.message.slice(0, 50)}`;
-        btn.style.background = 'rgba(239,68,85,.2)';
-        btn.style.color = '#ef4455';
-        btn.disabled = false;
-      }
-    } else if (card.platform === 'X') {
-      btn.textContent = '✓ Approved (drag to X lane → Approve Image to post)';
+    // First Approve only saves to Sheets — posting happens on Approve Image
+    if (card.platform === 'X') {
+      btn.textContent = '✓ Saved — click Needs Image then Approve Image to post';
+    } else if (card.platform === 'Telegram') {
+      btn.textContent = '✓ Saved to Sheets — click Needs Image then Approve Image to post';
+    } else if (card.platform === 'Instagram') {
+      btn.textContent = '✓ Saved to Sheets — post manually on Instagram';
     } else {
       btn.textContent = '✓ Approved';
     }
@@ -3574,6 +3566,9 @@ async function approveGeneratedImage() {
       btn.style.cssText += ';background:rgba(239,68,85,.15);color:#ef4455;';
       btn.disabled = false;
     }
+  } else if (card.platform === 'Instagram') {
+    setCardStatus('approved');
+    btn.textContent = '✓ Image saved — post manually on Instagram';
   } else {
     setCardStatus('approved');
     btn.textContent = '✓ Image Approved';
