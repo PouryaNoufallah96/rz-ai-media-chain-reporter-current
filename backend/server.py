@@ -210,6 +210,51 @@ def openai_image(prompt, model='dall-e-3', size='1792x1024'):
     img_r.raise_for_status()
     return base64.b64encode(img_r.content).decode()
 
+# ── OpenRouter image generation ───────────────────────────────────────────────
+# Models that use the OpenRouter chat/completions endpoint with modalities:["image"]
+OPENROUTER_IMAGE_MODELS = {
+    'x-ai/grok-imagine-image-quality':      ['image'],
+    'google/gemini-3.1-flash-image-preview':['image', 'text'],
+    'google/gemini-3-pro-image-preview':    ['image', 'text'],
+    'openai/gpt-5.4-image-2':              ['image', 'text'],
+    'recraft/recraft-v4-pro':              ['image'],
+}
+
+def openrouter_image(prompt, model):
+    if not OPENROUTER_KEY:
+        raise ValueError('OPENROUTER_API_KEY not set in .env')
+    modalities = OPENROUTER_IMAGE_MODELS.get(model, ['image', 'text'])
+    r = requests.post(
+        'https://openrouter.ai/api/v1/chat/completions',
+        json={
+            'model': model,
+            'messages': [{'role': 'user', 'content': prompt}],
+            'modalities': modalities,
+        },
+        headers={
+            'Authorization': f'Bearer {OPENROUTER_KEY}',
+            'Content-Type': 'application/json',
+            'HTTP-Referer': ORIGIN if ORIGIN != '*' else 'https://chainreporter.app',
+            'X-Title': 'ChainReporter Editorial AI',
+        },
+        timeout=180,
+    )
+    r.raise_for_status()
+    data = r.json()
+    msg = data['choices'][0]['message']
+    images = msg.get('images') or []
+    if images:
+        data_url = images[0]['image_url']['url']   # "data:image/png;base64,..."
+        if ',' in data_url:
+            return data_url.split(',', 1)[1]       # strip the data: prefix
+        return data_url
+    # some models embed base64 directly in content
+    content = msg.get('content', '')
+    if content.startswith('data:'):
+        return content.split(',', 1)[1] if ',' in content else content
+    raise ValueError(f'No image returned by {model}. Response: {str(data)[:300]}')
+
+
 # ── Apps Script helper ─────────────────────────────────────────────────────────
 def call_apps_script(payload):
     if not SCRIPT_URL or SCRIPT_URL.startswith('PASTE_'):
@@ -294,7 +339,10 @@ def handle_generate_image(body):
         'Style: professional financial journalism photography, ultra-high-detail, dramatic lighting.'
     )
 
-    image_b64 = openai_image(prompt, model, size)
+    if model in OPENROUTER_IMAGE_MODELS:
+        image_b64 = openrouter_image(prompt, model)
+    else:
+        image_b64 = openai_image(prompt, model, size)
     return {'imageB64': image_b64, 'prompt': prompt, 'model': model}
 
 
