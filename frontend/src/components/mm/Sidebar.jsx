@@ -4,22 +4,21 @@ import { useMmStore, MM_SOURCES, MEDIA_COLORS, PLAT_COLORS, EDITORIAL_MODEL_META
 const CHECK_SVG = <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#07090e" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
 const CHECK_SVG_W = <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
 
-const LABEL_STYLE = { display:'block', fontSize:11, fontWeight:600, letterSpacing:'.1em', textTransform:'uppercase', color:'#7a8499', marginBottom:8 }
+const LABEL_STYLE = { display:'block', fontSize:10.5, fontWeight:600, letterSpacing:'.1em', textTransform:'uppercase', color:'#7a8499', marginBottom:5 }
 
 function ToggleRow({ on, color, label, sub, abbr, onClick, checkWhite }) {
   const active = {
     borderColor: color + '88',
     background: color + '1a',
   }
-  const inactive = { borderColor:'rgba(255,255,255,.08)', background:'rgba(255,255,255,.03)' }
   return (
     <div onClick={onClick} className="toggle-row" style={on ? active : {}}>
-      <div style={{width:22,height:22,borderRadius:6,background:color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:7,fontWeight:800,color}}>{abbr}</div>
+      <div style={{width:18,height:18,borderRadius:5,background:color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:6.5,fontWeight:800,color}}>{abbr}</div>
       <div style={{flex:1,minWidth:0,textAlign:'left'}}>
-        <div style={{fontSize:12,fontWeight:600,color:'#f0f2f8'}}>{label}</div>
-        <div style={{fontSize:10,color:'#7a8499'}}>{sub}</div>
+        <div style={{fontSize:11,fontWeight:600,color:'#f0f2f8'}}>{label}</div>
+        <div style={{fontSize:9.5,color:'#7a8499'}}>{sub}</div>
       </div>
-      <div style={{width:14,height:14,borderRadius:4,flexShrink:0,background:on?color:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{width:12,height:12,borderRadius:3,flexShrink:0,background:on?color:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
         {on ? (checkWhite ? CHECK_SVG_W : CHECK_SVG) : null}
       </div>
     </div>
@@ -71,7 +70,7 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
 
   return (
     <aside id="mm-sidebar" className="glass" style={{textAlign:'left'}}>
-      <div className="p-4" style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div className="p-4" style={{display:'flex',flexDirection:'column',gap:10}}>
 
         {/* Title */}
         <div>
@@ -84,7 +83,7 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
         {/* ① Media */}
         <div>
           <label style={LABEL_STYLE}>① Select Media</label>
-          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
             {[
               {m:'RZ Prime',      color:'#f0a040',abbr:'RZ', sub:'Token Access · BNB Chain · Retail'},
               {m:'Coin Hall',     color:'#00d4ff',abbr:'CH', sub:'Luxury · Web3 · Aspirational'},
@@ -100,7 +99,7 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
         <div>
           <label style={{...LABEL_STYLE,marginBottom:4}}>② Destination Platforms</label>
           <p style={{fontSize:10,color:'#4a5568',marginBottom:8}}>Creates columns. Drag news cards into them after analysis.</p>
-          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
             <ToggleRow on={selectedPlatforms.includes('X')} color='#00d4ff' label='X (Twitter)' sub='Short viral · 280 chars' abbr={
               <svg width="11" height="11" viewBox="0 0 24 24" fill="#00d4ff"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.81l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             } onClick={()=>togglePlatform('X')} />
@@ -151,7 +150,7 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
         {/* ⑥ Filter Engine */}
         <div>
           <label style={{...LABEL_STYLE,marginBottom:6}}>⑥ Filter Engine</label>
-          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
             {filterOptions.map(f => (
               <ToggleRow key={f.key} on={filterMode===f.key} color={f.color} abbr={f.abbr} label={f.label} sub={f.sub} onClick={()=>setFilterMode(f.key)} />
             ))}
@@ -162,7 +161,7 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
         <div>
           <label style={{...LABEL_STYLE,marginBottom:4}}>⑦ AI Editorial Models</label>
           <p style={{fontSize:10,color:'#4a5568',marginBottom:8}}>Choose 1–5 models. Each picks 5 articles per brand independently.</p>
-          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
             {modelOptions.map(m => (
               <ToggleRow key={m.key} on={selectedModels.includes(m.key)} color={m.color} abbr={m.abbr}
                 label={<>{m.label} <span style={{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:3,background:m.color+'22',color:m.color,marginLeft:3}}>{m.badge}</span></>}
