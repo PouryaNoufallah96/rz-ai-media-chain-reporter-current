@@ -14,12 +14,12 @@ function ToggleRow({ on, color, label, sub, abbr, onClick, checkWhite }) {
   const inactive = { borderColor:'rgba(255,255,255,.08)', background:'rgba(255,255,255,.03)' }
   return (
     <div onClick={onClick} className="toggle-row" style={on ? active : {}}>
-      <div style={{width:22,height:22,borderRadius:6,background:color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:7,fontWeight:800,color}}>{abbr}</div>
+      <div style={{width:20,height:20,borderRadius:5,background:color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:7,fontWeight:800,color}}>{abbr}</div>
       <div style={{flex:1,minWidth:0,textAlign:'left'}}>
         <div style={{fontSize:12,fontWeight:600,color:'#f0f2f8'}}>{label}</div>
         <div style={{fontSize:10,color:'#7a8499'}}>{sub}</div>
       </div>
-      <div style={{width:14,height:14,borderRadius:4,flexShrink:0,background:on?color:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{width:13,height:13,borderRadius:4,flexShrink:0,background:on?color:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
         {on ? (checkWhite ? CHECK_SVG_W : CHECK_SVG) : null}
       </div>
     </div>
