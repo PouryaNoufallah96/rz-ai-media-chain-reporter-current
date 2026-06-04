@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 3000;
+const DIST = path.join(__dirname, 'frontend', 'dist');
 
 const MIME = {
   '.html': 'text/html',
@@ -23,18 +24,24 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
+const FALLBACK = path.join(DIST, 'index.html');
+
 const server = http.createServer((req, res) => {
   let urlPath = req.url.split('?')[0];
   if (urlPath === '/') urlPath = '/index.html';
 
-  const filePath = path.join(__dirname, urlPath);
+  const filePath = path.join(DIST, urlPath);
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME[ext] || 'application/octet-stream';
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not found');
+      // SPA fallback: unknown paths → index.html (React Router handles routing)
+      fs.readFile(FALLBACK, (err2, html) => {
+        if (err2) { res.writeHead(404); res.end('Not found'); return; }
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(html);
+      });
       return;
     }
     res.writeHead(200, { 'Content-Type': contentType });
@@ -43,5 +50,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`ChainReporter frontend → http://localhost:${PORT}`);
 });
