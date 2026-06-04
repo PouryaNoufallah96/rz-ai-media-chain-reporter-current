@@ -1,0 +1,12 @@
+node_modules/
+frontend/node_modules/
+backend/__pycache__/
+backend/filtering/__pycache__/
+backend/data/
+*.pyc
+*.pkl
+*.mp4
+temporary screenshots/
+.git/
+CLAUDE*.md
+.DS_Store
