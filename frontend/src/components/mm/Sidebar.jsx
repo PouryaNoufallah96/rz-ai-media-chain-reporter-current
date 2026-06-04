@@ -6,20 +6,22 @@ const CHECK_SVG_W = <svg width="9" height="9" viewBox="0 0 24 24" fill="none" st
 
 const LABEL_STYLE = { display:'block', fontSize:11, fontWeight:600, letterSpacing:'.1em', textTransform:'uppercase', color:'#7a8499', marginBottom:8 }
 
-function ToggleRow({ on, color, label, sub, abbr, onClick, checkWhite }) {
-  const active = {
-    borderColor: color + '88',
-    background: color + '1a',
-  }
+function ToggleRow({ on, color, label, sub, abbr, onClick, checkWhite, xs }) {
+  const active = { borderColor: color + '88', background: color + '1a' }
   const inactive = { borderColor:'rgba(255,255,255,.08)', background:'rgba(255,255,255,.03)' }
+  const iconSz  = xs ? 15 : 17
+  const titleSz = xs ? 11 : 11.5
+  const subSz   = xs ? 9  : 9.5
+  const chkSz   = xs ? 10 : 11
+  const rowExtra = xs ? {padding:'5px 8px', gap:6} : {}
   return (
-    <div onClick={onClick} className="toggle-row" style={on ? active : {}}>
-      <div style={{width:20,height:20,borderRadius:5,background:color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:7,fontWeight:800,color}}>{abbr}</div>
+    <div onClick={onClick} className="toggle-row" style={{...(on ? active : {}), ...rowExtra}}>
+      <div style={{width:iconSz,height:iconSz,borderRadius:5,background:color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:6.5,fontWeight:800,color}}>{abbr}</div>
       <div style={{flex:1,minWidth:0,textAlign:'left'}}>
-        <div style={{fontSize:12,fontWeight:600,color:'#f0f2f8'}}>{label}</div>
-        <div style={{fontSize:10,color:'#7a8499'}}>{sub}</div>
+        <div style={{fontSize:titleSz,fontWeight:600,color:'#f0f2f8'}}>{label}</div>
+        <div style={{fontSize:subSz,color:'#7a8499'}}>{sub}</div>
       </div>
-      <div style={{width:13,height:13,borderRadius:4,flexShrink:0,background:on?color:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{width:chkSz,height:chkSz,borderRadius:3,flexShrink:0,background:on?color:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
         {on ? (checkWhite ? CHECK_SVG_W : CHECK_SVG) : null}
       </div>
     </div>
@@ -91,7 +93,7 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
               {m:'ChainReporter', color:'#9b72f5',abbr:'CR', sub:'General Crypto News · Full Spectrum'},
               {m:'Meta Coin Guard',color:'#4ade80',abbr:'MCG',sub:'Security · DeFi Protection · Risk'},
             ].map(({m,color,abbr,sub}) => (
-              <ToggleRow key={m} on={selectedMedia.includes(m)} color={color} label={m} sub={sub} abbr={abbr} onClick={()=>toggleMedia(m)} />
+              <ToggleRow key={m} on={selectedMedia.includes(m)} color={color} label={m} sub={sub} abbr={abbr} onClick={()=>toggleMedia(m)} xs />
             ))}
           </div>
         </div>
@@ -166,7 +168,7 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
             {modelOptions.map(m => (
               <ToggleRow key={m.key} on={selectedModels.includes(m.key)} color={m.color} abbr={m.abbr}
                 label={<>{m.label} <span style={{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:3,background:m.color+'22',color:m.color,marginLeft:3}}>{m.badge}</span></>}
-                sub={m.sub} onClick={()=>toggleModel(m.key)} />
+                sub={m.sub} onClick={()=>toggleModel(m.key)} xs />
             ))}
           </div>
         </div>
