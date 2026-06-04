@@ -17,7 +17,7 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#07090e;color:
 .tc-chip{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10.5px;font-weight:600;background:rgba(0,212,160,.13);color:#00d4a0;border:1px solid rgba(0,212,160,.32);white-space:nowrap;line-height:1.6;}
 .tc-x{background:none;border:none;cursor:pointer;padding:0;margin-left:2px;font-size:14px;line-height:1;color:#00d4a0;opacity:.65;display:inline-flex;align-items:center;}
 .tc-x:hover{opacity:1;}
-.toggle-row{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);cursor:pointer;user-select:none;transition:border-color .18s,background .18s}
+.toggle-row{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);cursor:pointer;user-select:none;transition:border-color .18s,background .18s}
 .toggle-row:hover{background:rgba(255,255,255,.06)}
 .src-chip{font-size:9.5px;font-weight:500;padding:3px 7px;border-radius:5px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);color:#7a8499;cursor:pointer;transition:border-color .18s,color .18s,background .18s;white-space:nowrap}
 .src-chip:hover{color:#f0f2f8;border-color:rgba(255,255,255,.2)}
