@@ -1,0 +1,35 @@
+/* About page styles — ported from about.html */
+:root{--bg:#07090e;--gold:#f0a040;--mint:#00d4a0;--violet:#9b72f5;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:#f0f2f8;font-family:'Inter',sans-serif;overflow-x:hidden;}
+
+.glass{background:rgba(12,15,24,0.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);}
+.nav-link{font-size:13px;font-weight:500;color:#7a8499;padding:6px 14px;border-radius:8px;text-decoration:none;transition:color 0.18s ease,background 0.18s ease;}
+.nav-link:hover{color:#f0f2f8;background:rgba(255,255,255,0.05);}
+.nav-link.active{color:#00d4a0;background:rgba(0,212,160,0.08);border:1px solid rgba(0,212,160,0.22);}
+
+#hero-section{position:relative;height:300vh;}
+#hero-sticky{position:sticky;top:0;height:100vh;overflow:hidden;}
+#hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;opacity:0.25;filter:blur(8px);transform:scale(1.08) translateZ(0);will-change:opacity,filter,transform;}
+#hero-vignette{position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 50%,transparent 30%,rgba(7,9,14,0.75) 100%),linear-gradient(to bottom,rgba(7,9,14,0.72) 0%,transparent 25%),linear-gradient(to top,rgba(7,9,14,0.85) 0%,transparent 30%),linear-gradient(to right,rgba(7,9,14,0.55) 0%,transparent 20%),linear-gradient(to left,rgba(7,9,14,0.55) 0%,transparent 20%);pointer-events:none;z-index:2;}
+#hero-glow{position:absolute;inset:0;background:radial-gradient(ellipse 55% 45% at 50% 48%,rgba(0,212,160,0.09) 0%,transparent 70%),radial-gradient(ellipse 40% 35% at 30% 65%,rgba(155,114,245,0.07) 0%,transparent 70%);pointer-events:none;z-index:3;}
+#hero-content{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;padding:0 24px;text-align:center;}
+
+.hero-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--mint);background:rgba(0,212,160,0.08);border:1px solid rgba(0,212,160,0.25);padding:5px 14px;border-radius:100px;margin-bottom:28px;opacity:0;transform:translateY(12px);animation:fadeUp 0.8s ease 0.3s forwards;}
+.hero-title{font-family:'Space Grotesk',sans-serif;font-size:clamp(48px,7vw,96px);font-weight:800;line-height:1.0;letter-spacing:-0.035em;color:#f0f2f8;margin-bottom:24px;opacity:0;transform:translateY(16px);animation:fadeUp 0.9s ease 0.5s forwards;}
+.hero-title span{color:var(--gold);}
+.hero-sub{font-size:clamp(15px,2vw,19px);font-weight:400;color:#8a93a8;max-width:560px;line-height:1.65;margin-bottom:40px;opacity:0;transform:translateY(12px);animation:fadeUp 0.9s ease 0.7s forwards;}
+.hero-scroll-hint{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;z-index:10;opacity:0;animation:fadeUp 1s ease 1.2s forwards;}
+.hero-scroll-hint span{font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#7a8499;}
+.scroll-arrow{width:20px;height:30px;border:1.5px solid rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:flex-start;justify-content:center;padding-top:5px;}
+.scroll-dot{width:3px;height:6px;border-radius:2px;background:var(--mint);animation:scrollDot 1.8s ease-in-out infinite;}
+
+@keyframes scrollDot{0%{transform:translateY(0);opacity:1;}80%{transform:translateY(10px);opacity:0;}100%{transform:translateY(0);opacity:0;}}
+@keyframes fadeUp{to{opacity:1;transform:translateY(0);}}
+
+.section{position:relative;z-index:20;background:var(--bg);}
+.glass-card{background:rgba(20,27,38,0.7);border:1px solid rgba(255,255,255,0.07);border-radius:20px;backdrop-filter:blur(12px);}
+.step-num{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--mint);background:rgba(0,212,160,0.08);border:1px solid rgba(0,212,160,0.22);padding:3px 10px;border-radius:100px;}
+.icon-box{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.section-aurora{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.footer-divider{height:1px;background:linear-gradient(to right,transparent,rgba(255,255,255,0.08),transparent);}
