@@ -1,6 +1,7 @@
 import hashlib
 import os
 import pickle
+import threading
 import time
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from openai import OpenAI
 
 from .config import EMBED_BATCH
 
-MODEL = 'text-embedding-3-small'
+MODEL = 'openai/text-embedding-3-small'
 DIM   = 1536
 
 # Anchor cache path to the backend/data/ directory regardless of CWD
@@ -25,10 +26,16 @@ def _l2(mat: np.ndarray) -> np.ndarray:
 
 class Embedder:
     def __init__(self, cache_path: str = os.environ.get('EMBED_CACHE_PATH', _DEFAULT_CACHE)):
-        self.client     = OpenAI()   # reads OPENAI_API_KEY from env
+        # Routed through OpenRouter (model id 'openai/text-embedding-3-small')
+        # so embeddings share billing/quota with the editorial AI calls.
+        self.client     = OpenAI(
+            base_url=os.environ.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+            api_key=os.environ.get('OPENROUTER_API_KEY', ''),
+        )
         self.batch_size = EMBED_BATCH
         self.cache_path = Path(cache_path)
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock: threading.Lock = threading.Lock()
         self.store: dict = {}
         if self.cache_path.exists():
             try:
@@ -53,31 +60,32 @@ class Embedder:
         if not texts:
             return np.zeros((0, DIM), dtype=np.float32)
 
-        out    = [None] * len(texts)
-        miss_i = []
-        miss_t = []
+        with self._lock:
+            out    = [None] * len(texts)
+            miss_i = []
+            miss_t = []
 
-        for i, t in enumerate(texts):
-            cached = self.store.get(self._key(t))
-            if cached is None:
-                miss_i.append(i)
-                miss_t.append(t)
-            else:
-                out[i] = cached
+            for i, t in enumerate(texts):
+                cached = self.store.get(self._key(t))
+                if cached is None:
+                    miss_i.append(i)
+                    miss_t.append(t)
+                else:
+                    out[i] = cached
 
-        api_calls  = 0
-        cache_hits = len(texts) - len(miss_t)
+            api_calls  = 0
+            cache_hits = len(texts) - len(miss_t)
 
-        for j in range(0, len(miss_t), self.batch_size):
-            chunk = miss_t[j:j + self.batch_size]
-            vecs  = _l2(self._call_api(chunk))
-            api_calls += 1
-            for k, vec in enumerate(vecs):
-                idx = miss_i[j + k]
-                out[idx] = vec
-                self.store[self._key(miss_t[j + k])] = vec
+            for j in range(0, len(miss_t), self.batch_size):
+                chunk = miss_t[j:j + self.batch_size]
+                vecs  = _l2(self._call_api(chunk))
+                api_calls += 1
+                for k, vec in enumerate(vecs):
+                    idx = miss_i[j + k]
+                    out[idx] = vec
+                    self.store[self._key(miss_t[j + k])] = vec
 
-        if miss_t:
-            self.cache_path.write_bytes(pickle.dumps(self.store))
+            if miss_t:
+                self.cache_path.write_bytes(pickle.dumps(self.store))
 
-        return np.vstack(out).astype(np.float32), api_calls, cache_hits
+            return np.vstack(out).astype(np.float32), api_calls, cache_hits

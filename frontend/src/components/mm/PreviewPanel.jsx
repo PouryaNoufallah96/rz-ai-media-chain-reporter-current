@@ -38,7 +38,7 @@ async function sendToX(card, imageB64) {
 }
 
 export default function PreviewPanel() {
-  const { activeCard, setActiveCard, updateCardStatus } = useMmStore()
+  const { activeCard, setActiveCard, updateCardStatus, updateCard } = useMmStore()
   const card = activeCard
   const isOpen = !!card
 
@@ -53,6 +53,7 @@ export default function PreviewPanel() {
   const [approveImgLabel, setApproveImgLabel] = useState('✓ Approve Image')
   const [schedDate, setSchedDate] = useState('')
   const [schedTime, setSchedTime] = useState('09:00')
+  const [selectedVariant, setSelectedVariant] = useState(0)
   const copyRef = useRef(null)
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function PreviewPanel() {
       setGeneratedImg('')
       setApproveLabel('✓ Approve')
       setApproveImgLabel('✓ Approve Image')
+      setSelectedVariant(0)
     }
   }, [card?.id])
 
@@ -216,6 +218,28 @@ export default function PreviewPanel() {
               : <div id="preview-copy" style={{fontSize:13,color:'#c8cdd8',lineHeight:1.65}}>{copyText}</div>
             }
           </div>
+
+          {/* Variant picker */}
+          {(card.variants||[]).length > 1 && (
+            <div>
+              <p style={{fontSize:10,fontWeight:600,color:'#7a8499',letterSpacing:'.06em',textTransform:'uppercase',marginBottom:6}}>Variants — pick one</p>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {card.variants.map((v,i)=>(
+                  <div key={i} onClick={()=>{
+                      setSelectedVariant(i); setCopyText(v.copy)
+                      updateCard(card.id, { copy:v.copy, hashtags:v.hashtags, charCount:v.copy.length })
+                    }}
+                    style={{cursor:'pointer',fontSize:11,lineHeight:1.5,padding:'7px 10px',borderRadius:7,
+                      border:`1px solid ${i===selectedVariant?pc+'70':'rgba(255,255,255,.08)'}`,
+                      background:i===selectedVariant?pc+'14':'rgba(255,255,255,.03)',
+                      color:i===selectedVariant?'#f0f2f8':'#7a8499',
+                      display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>
+                    {v.copy}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Hashtags */}
           <div style={{display:'flex',flexWrap:'wrap',gap:5}}>

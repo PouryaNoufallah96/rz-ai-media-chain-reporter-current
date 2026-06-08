@@ -48,6 +48,7 @@ export const EDITORIAL_MODEL_META = {
 }
 
 export const mkey = m => m.toLowerCase().replace(/\s+/g,'-')
+export const cacheKey = (articleId, platform, modelKey) => `${articleId}|${platform}|${modelKey}`
 
 function buildEmptyRouted() {
   const r = {}
@@ -73,6 +74,7 @@ export const useMmStore = create((set, get) => ({
   selectedModels:    ['gpt','gemini','claude','deepseek','grok'],
   modelLanes:        { gpt:{}, gemini:{}, claude:{}, deepseek:{}, grok:{} },
   platformLanes:     {},
+  copyCache:         {},
   progress:          { pct: 0, label: '' },
   analyzing:         false,
   errorMsg:          '',
@@ -152,4 +154,30 @@ export const useMmStore = create((set, get) => ({
     })
     return { activeCard, modelLanes, platformLanes }
   }),
+
+  updateCard: (cardId, extra = {}) => set(s => {
+    const activeCard = s.activeCard?.id === cardId ? { ...s.activeCard, ...extra } : s.activeCard
+    const modelLanes = { ...s.modelLanes }
+    Object.keys(modelLanes).forEach(mk => {
+      const lanes = { ...modelLanes[mk] }
+      Object.keys(lanes).forEach(brand => {
+        lanes[brand] = lanes[brand].map(c => c.id === cardId ? { ...c, ...extra } : c)
+      })
+      modelLanes[mk] = lanes
+    })
+    const platformLanes = { ...s.platformLanes }
+    Object.keys(platformLanes).forEach(brand => {
+      const lanes = { ...platformLanes[brand] }
+      Object.keys(lanes).forEach(plat => {
+        lanes[plat] = lanes[plat].map(c => c.id === cardId ? { ...c, ...extra } : c)
+      })
+      platformLanes[brand] = lanes
+    })
+    return { activeCard, modelLanes, platformLanes }
+  }),
+
+  getCachedCopy: (articleId, platform, modelKey) => get().copyCache[cacheKey(articleId, platform, modelKey)] || null,
+  setCachedCopy: (articleId, platform, modelKey, payload) => set(s => ({
+    copyCache: { ...s.copyCache, [cacheKey(articleId, platform, modelKey)]: payload }
+  })),
 }))

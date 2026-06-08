@@ -5,6 +5,7 @@ Public entry point: run_pipeline(articles, selected_media, topics, recency_hours
 import math
 import re
 import sys
+import threading
 import urllib.parse
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -22,12 +23,16 @@ from .embedder import Embedder
 # ── Module-level singletons (initialised once on import) ──────────────────────
 _embedder: Optional[Embedder] = None
 _anchor_vecs: Optional[dict]  = None   # brand_key → (n_phrases, 1536) array
+_embedder_lock    = threading.Lock()
+_anchor_vecs_lock = threading.Lock()
 
 
 def _get_embedder() -> Embedder:
     global _embedder
     if _embedder is None:
-        _embedder = Embedder()
+        with _embedder_lock:
+            if _embedder is None:
+                _embedder = Embedder()
     return _embedder
 
 
@@ -35,12 +40,16 @@ def _get_anchor_vecs() -> dict:
     global _anchor_vecs
     if _anchor_vecs is not None:
         return _anchor_vecs
-    emb = _get_embedder()
-    _anchor_vecs = {}
-    for key, cfg in BRAND_CONFIGS.items():
-        phrases = cfg['anchor_phrases']
-        mat, _, _ = emb.embed(phrases)
-        _anchor_vecs[key] = mat   # (n_phrases, 1536), already L2-normalised
+    with _anchor_vecs_lock:
+        if _anchor_vecs is not None:
+            return _anchor_vecs
+        emb = _get_embedder()
+        vecs = {}
+        for key, cfg in BRAND_CONFIGS.items():
+            phrases = cfg['anchor_phrases']
+            mat, _, _ = emb.embed(phrases)
+            vecs[key] = mat   # (n_phrases, 1536), already L2-normalised
+        _anchor_vecs = vecs
     return _anchor_vecs
 
 

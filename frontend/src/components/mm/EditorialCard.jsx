@@ -1,4 +1,6 @@
-import { useMmStore, MEDIA_COLORS, PLAT_COLORS } from '../../store/mmStore'
+import { useEffect, useRef, useState } from 'react'
+import { useMmStore, MEDIA_COLORS, PLAT_COLORS, PLAT_LIST } from '../../store/mmStore'
+import { routeCardToPlatform } from '../../utils/routeCardToPlatform'
 
 const STATUS_BADGE = {
   ready:     <span className="sbadge sb-ready"     style={{fontSize:8.5}}>● Ready</span>,
@@ -11,14 +13,42 @@ const MK_LABEL = {'RZ Prime':'RZ','Coin Hall':'CH','ChainReporter':'CR','Meta Co
 
 export default function EditorialCard({ card, onDragStart }) {
   const setActiveCard = useMmStore(s => s.setActiveCard)
+  const selectedPlatforms = useMmStore(s => s.selectedPlatforms)
+  const platformLanes = useMmStore(s => s.platformLanes)
+  const modelLanes = useMmStore(s => s.modelLanes)
+  const setPlatformLanes = useMmStore(s => s.setPlatformLanes)
+  const updateCard = useMmStore(s => s.updateCard)
+  const getCachedCopy = useMmStore(s => s.getCachedCopy)
+  const setCachedCopy = useMmStore(s => s.setCachedCopy)
+
+  const [popoverOpen, setPopoverOpen] = useState(false)
+  const popoverRef = useRef(null)
+
   const isSuggested = !card.platform || card.platform === 'suggested'
   const mc = MEDIA_COLORS[card.media] || '#7a8499'
   const pc = isSuggested ? null : (PLAT_COLORS[card.platform] || '#7a8499')
   const sentColor = card.sentiment === 'Bullish' ? '#00d4a0' : card.sentiment === 'Bearish' ? '#ef4455' : '#7a8499'
   const mkLabel = MK_LABEL[card.media] || (card.media||'').slice(0,2)
 
+  const routedPlatforms = PLAT_LIST.filter(p => (platformLanes[card.media]?.[p] || []).some(c => c.id === card.id))
+
+  useEffect(() => {
+    if (!popoverOpen) return
+    function onDown(e) { if (popoverRef.current && !popoverRef.current.contains(e.target)) setPopoverOpen(false) }
+    function onKey(e) { if (e.key === 'Escape') setPopoverOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [popoverOpen])
+
+  function sendTo(plat) {
+    if (routedPlatforms.includes(plat)) return
+    routeCardToPlatform(card.id, plat, card.media, { modelLanes, platformLanes, setPlatformLanes, updateCard, getCachedCopy, setCachedCopy })
+  }
+
   return (
     <div
+      ref={popoverRef}
       className={`mm-card fade-up${card === useMmStore.getState().activeCard ? ' active' : ''}`}
       id={`card-${card.id}`}
       draggable
@@ -26,6 +56,25 @@ export default function EditorialCard({ card, onDragStart }) {
       onDragEnd={e => e.currentTarget.classList.remove('dragging')}
       onClick={() => setActiveCard(card)}
     >
+      <button className="qs-btn" title="Quick send to platform"
+        onClick={e => { e.stopPropagation(); setPopoverOpen(o => !o) }}>⋯</button>
+
+      {popoverOpen && (
+        <div className="qs-popover" onClick={e => e.stopPropagation()}>
+          <span className="qs-label">Send to</span>
+          {selectedPlatforms.map(p => {
+            const routed = routedPlatforms.includes(p)
+            return (
+              <button key={p} className={`qs-plat-btn${routed ? ' routed' : ''}`}
+                onClick={() => { sendTo(p); setPopoverOpen(false) }}>
+                <span>{p}</span>
+                {routed && <span>✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Row 1: media badge + platform + time */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:7,gap:4}}>
         <div style={{display:'flex',alignItems:'center',gap:4}}>
@@ -34,6 +83,7 @@ export default function EditorialCard({ card, onDragStart }) {
             ? <span style={{fontSize:8,fontWeight:600,padding:'1.5px 5px',borderRadius:3,background:'rgba(255,255,255,.04)',color:'#4a5568',border:'1px solid rgba(255,255,255,.08)'}}>drag to platform →</span>
             : <span style={{fontSize:8,fontWeight:700,padding:'1.5px 5px',borderRadius:3,background:pc+'20',color:pc,border:`1px solid ${pc}35`}}>{card.platform}</span>
           }
+          {isSuggested && routedPlatforms.length > 0 && <span className="routed-badge">→ {routedPlatforms.join(', ')}</span>}
         </div>
         <span style={{fontSize:9,color:'#4a5568'}}>{card.timeAgo}</span>
       </div>

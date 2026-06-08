@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { useMmStore, MEDIA_COLORS, PLAT_COLORS, EDITORIAL_MODEL_META, mkey } from '../../store/mmStore'
+import { routeCardToPlatform } from '../../utils/routeCardToPlatform'
 import EditorialCard from './EditorialCard'
 
 // Drag state
@@ -29,10 +30,9 @@ function ModelLane({ modelKey, brand }) {
 }
 
 function PlatformLane({ brand, plat }) {
-  const { platformLanes, modelLanes, setPlatformLanes, setModelLanes } = useMmStore()
+  const { platformLanes, modelLanes, setPlatformLanes, updateCard, getCachedCopy, setCachedCopy } = useMmStore()
   const col = PLAT_COLORS[plat] || '#7a8499'
   const cards = platformLanes[brand]?.[plat] || []
-  const [dragOver, setDragOver] = [false, () => {}]
 
   function handleDrop(e) {
     e.preventDefault()
@@ -40,48 +40,7 @@ function PlatformLane({ brand, plat }) {
     if (!cardId) return
     e.currentTarget.classList.remove('drag-over')
     _dragCardId = null
-
-    // Find the card in modelLanes
-    const ml = { ...modelLanes }
-    let card = null
-    for (const key of Object.keys(ml)) {
-      for (const b of Object.keys(ml[key])) {
-        const idx = ml[key][b].findIndex(c => c.id === cardId)
-        if (idx !== -1) {
-          card = { ...ml[key][b][idx], platform: plat, media: b }
-          break
-        }
-      }
-      if (card) break
-    }
-    if (!card) {
-      // Check platform lanes
-      const pl = { ...platformLanes }
-      for (const b of Object.keys(pl)) {
-        for (const p of Object.keys(pl[b])) {
-          const idx = pl[b][p].findIndex(c => c.id === cardId)
-          if (idx !== -1) {
-            card = { ...pl[b][p][idx], platform: plat }
-            pl[b][p].splice(idx, 1)
-            break
-          }
-        }
-        if (card) break
-      }
-      const newPl = { ...pl }
-      if (!newPl[brand]) newPl[brand] = {}
-      newPl[brand][plat] = [...(newPl[brand]?.[plat] || []), card]
-      setPlatformLanes(newPl)
-      return
-    }
-
-    const newPl = JSON.parse(JSON.stringify(platformLanes))
-    if (!newPl[brand]) newPl[brand] = {}
-    if (!newPl[brand][plat]) newPl[brand][plat] = []
-    if (!newPl[brand][plat].find(c => c.id === cardId)) {
-      newPl[brand][plat].push({ ...card, platform: plat })
-    }
-    setPlatformLanes(newPl)
+    routeCardToPlatform(cardId, plat, brand, { modelLanes, platformLanes, setPlatformLanes, updateCard, getCachedCopy, setCachedCopy })
   }
 
   const PlatIcons = {

@@ -32,40 +32,29 @@ async function _load() {
   }
 }
 function _cosine(a,b) { let d=0; for(let i=0;i<a.length;i++) d+=a[i]*b[i]; return d; }
+const EMBED_CHUNK = 12;
 async function embedArticles(articles) {
   if (!_initPromise) _initPromise = _load();
   await _initPromise;
-  for (const art of articles) {
-    const text = (art.title+' '+art.desc).slice(0,512);
-    const out = await _extractor(text,{pooling:'mean',normalize:true});
-    const vec = Array.from(out.data);
-    art._semScores = {};
-    for (const [brand,bv] of Object.entries(_brandVecs)) {
-      art._semScores[brand] = Math.max(0,_cosine(vec,bv))*100;
-    }
+  for (let c = 0; c < articles.length; c += EMBED_CHUNK) {
+    const chunk = articles.slice(c, c + EMBED_CHUNK);
+    const texts = chunk.map(art => (art.title+' '+art.desc).slice(0,512));
+    const out = await _extractor(texts,{pooling:'mean',normalize:true});
+    const dim = out.dims[out.dims.length-1];
+    const flat = out.data;
+    chunk.forEach((art,k) => {
+      const vec = flat.slice(k*dim, (k+1)*dim);
+      art._semScores = {};
+      for (const [brand,bv] of Object.entries(_brandVecs)) {
+        art._semScores[brand] = Math.max(0,_cosine(vec,bv))*100;
+      }
+    });
   }
 }
 _initPromise = _load().catch(err => { window._semRouterError = err.message; });
 window._semRouter = { embedArticles, _initPromise };
   `
   document.head.appendChild(s)
-}
-
-async function generatePlatformCopy(card, platform, updateCard) {
-  try {
-    const r = await fetch(`${API_BASE}/api/copy/generate`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ article:{title:card.headline,source:card.source,desc:card.copy,matchedKeywords:card.hashtags||[]}, platform, mediaBrand:card.media, sentiment:card.sentiment||'Neutral', modelKey:card._modelKey||'gpt' })
-    })
-    if (!r.ok) return
-    const result = await r.json()
-    updateCard(card.id, {
-      copy: result.copy||card.copy,
-      hashtags: result.hashtags?.length ? result.hashtags : card.hashtags,
-      charCount: platform==='X' ? (result.copy||'').length : null,
-      platReason: {X:'≤ 280 chars · punchy hook · 2–3 hashtags',Telegram:'Full context · 2–4 paragraphs · brand-voice',Instagram:'Strong opening hook · 5–10 hashtags'}[platform]||`Formatted for ${platform}`,
-    })
-  } catch(e) { console.warn('Platform copy failed:', e.message) }
 }
 
 function NavBar({ onToggleNav, navOpen }) {
@@ -126,11 +115,6 @@ export default function MultimediaPage() {
     loadSemRouter()
     initPlatformLanes()
   }, [])
-
-  // When a card is moved to a platform lane, generate platform-specific copy
-  // This is handled via the drag drop in LaneBoard, but we need to watch for card moves
-  // We use a simple effect: whenever platformLanes changes, regenerate copy for new cards
-  const prevPlatRef = useState({})[0]
 
   function handleAnalyze() {
     analyzeAndRoute(topics)

@@ -5,6 +5,8 @@ Start: python server.py
 """
 
 import json
+import gzip
+import threading
 import os
 import sys
 import re
@@ -15,7 +17,7 @@ import time
 import random
 import string
 import urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 import requests
 from datetime import datetime as _datetime, date as _date
@@ -117,36 +119,94 @@ EDITORIAL_MODELS = {
 }
 
 # ── Platform rules ─────────────────────────────────────────────────────────────
+# ── Topic-anchored emoji suggestions (keeps emoji placement semantic, not random) ──
+EMOJI_LEXICON = {'markets': '📈📉', 'crypto': '₿🪙', 'politics': '🏛️🗳️', 'breaking': '🚨⚡️'}
+_EMOJI_HINT = ', '.join(f'{k}→{v}' for k, v in EMOJI_LEXICON.items())
+
+_FACT_RULE = 'HARD RULE: use only facts present in the provided article. Do not invent figures, quotes, names, or outcomes.'
+
+def _sibling_block(sibling_copy, other_label):
+    if not sibling_copy:
+        return ''
+    return (f'\nFor reference, here is the {other_label} version already published for this same story — '
+            f'make this version structurally and tonally distinct, not a re-flow of it:\n"{sibling_copy}"')
+
 PLAT_RULES = {
     'X': {
-        'maxChars': 280, 'maxTokens': 180, 'temperature': 0.20,
-        'system': lambda brand, sent: (
-            f'You are the social media editor for {brand}, a premium crypto news brand. Sentiment: {sent}.\n'
-            'Write a single punchy news-wire tweet.\n'
+        'maxChars': 280, 'maxTokens': 180, 'temperature': 0.35,
+        'emoji_policy': 'none — zero emojis, journalist tone only',
+        'system': lambda brand, sent, sibling_copy=None: (
+            f'You are the senior social media editor for {brand}, a premium crypto news brand, known for scroll-stopping one-liners. Sentiment: {sent}.\n'
+            'PERSONA: sharp, fast, opinionated-but-factual — the post a trader screenshots before reading the full article.\n'
+            'STRUCTURE: one scroll-stopping unit — a hook line that states the news, optionally one short line of context/stakes, then 2-3 hashtags that matter for reach (ticker/topic tags, not generic ones).\n'
             'HARD RULE: response must be ≤ 280 characters total including spaces and hashtags.\n'
-            'Use 2-3 relevant hashtags. No emojis. Journalist tone. Start with the news hook.\n'
+            'EMOJI POLICY: none — zero emojis on X, ever.\n'
+            f'{_FACT_RULE}\n'
+            'EXAMPLES OF THE VOICE (do not reuse content, only mirror tone/structure):\n'
+            '- "BlackRock just filed for a spot Solana ETF. The Bitcoin ETF playbook is repeating — and this time the SEC clock is already ticking. #Solana #ETF"\n'
+            '- "Binance freezes $80M in wallets linked to a North Korean laundering ring. Compliance teams everywhere just got a new case study. #Binance #Crypto"\n'
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1","#Tag2"] }'
+            + _sibling_block(sibling_copy, 'X')
         ),
     },
     'Telegram': {
-        'maxChars': 4096, 'maxTokens': 700, 'temperature': 0.28,
-        'system': lambda brand, sent: (
-            f'You are the Telegram channel editor for {brand}. Sentiment: {sent}.\n'
-            'Write a full channel post: 2-4 paragraphs. Include context, implications, key figures.\n'
-            'End with a brand-voice closing line and 3-5 hashtags.\n'
+        'maxChars': 4096, 'maxTokens': 700, 'temperature': 0.5,
+        'emoji_policy': 'sparing, structural — e.g. 📌 for bullet markers, 🚨 only for genuinely breaking news',
+        'system': lambda brand, sent, sibling_copy=None: (
+            f'You are the Telegram channel editor for {brand}, writing for an audience that wants the full story without leaving the app. Sentiment: {sent}.\n'
+            'PERSONA: a newswire desk — calm, thorough, slightly more candid than the brand\'s public tweets.\n'
+            'STRUCTURE: a bold headline line, then a short body (2-3 tight paragraphs covering what happened, why it matters, and what to watch), then optional 📌 bullet points for key figures/dates, then a closing source-attribution line.\n'
+            'EMOJI POLICY: sparing and structural — 📌 for bullets, 🚨 only for breaking news, nothing decorative.\n'
+            f'Suggested topic→emoji anchors (use only if relevant, never force them): {_EMOJI_HINT}.\n'
+            f'{_FACT_RULE}\n'
+            'EXAMPLE OF THE VOICE (do not reuse content, only mirror tone/structure):\n'
+            '"**Coinbase adds institutional staking for Solana**\\n\\nCoinbase confirmed Tuesday that institutional clients can now stake SOL directly through its custody platform, joining a wave of exchanges chasing yield-hungry funds.\\n\\nThe move comes as on-chain staking volume hits a 2026 high, and could pressure smaller custodians to follow.\\n\\n📌 Minimum stake: $50K\\n📌 Live in: US, EU, Singapore\\n\\nSource: Coinbase press desk · #Solana #Staking #Institutional"\n'
+            'End with 3-5 hashtags (can be folded into the source line as shown above).\n'
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1"] }'
+            + _sibling_block(sibling_copy, 'X')
         ),
     },
     'Instagram': {
-        'maxChars': 2200, 'maxTokens': 700, 'temperature': 0.32,
-        'system': lambda brand, sent: (
-            f'You are the Instagram editor for {brand}. Sentiment: {sent}.\n'
-            'Write a visual-first caption: strong opening hook, storytelling body, clear CTA.\n'
-            'Use 5-10 discovery hashtags at the end. Light use of relevant emojis.\n'
+        'maxChars': 2200, 'maxTokens': 700, 'temperature': 0.4,
+        'emoji_policy': 'liberal but purposeful, semantically matched to topic — never decorative spam',
+        'system': lambda brand, sent, sibling_copy=None: (
+            f'You are the Instagram editor for {brand}, writing captions for a visual-first, scroll-fast audience. Sentiment: {sent}.\n'
+            'PERSONA: energetic storyteller — makes a market headline feel like a moment worth stopping for.\n'
+            'STRUCTURE: a strong opening hook line, a short storytelling body that builds context and stakes, a clear closing CTA (e.g. "Tap in for the full breakdown" / "Where do you stand?"), then a block of 5-10 discovery hashtags.\n'
+            'EMOJI POLICY: liberal but purposeful — pick emojis that semantically match the topic, never spam the same emoji repeatedly.\n'
+            f'Suggested topic→emoji anchors (use only if relevant): {_EMOJI_HINT}.\n'
+            f'{_FACT_RULE}\n'
+            'EXAMPLE OF THE VOICE (do not reuse content, only mirror tone/structure):\n'
+            '"Ethereum just flipped a 3-year resistance level into support 📈\\n\\nWhile most were watching Bitcoin, ETH quietly built the kind of base that precedes real moves — and on-chain data shows whales are accumulating again.\\n\\nIs this the setup before the next leg up, or another fakeout? Drop your call below 👇\\n\\n#Ethereum #ETH #CryptoMarkets #Web3 #OnChainData #BullMarket #DeFi"\n'
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1"] }'
+            + _sibling_block(sibling_copy, 'X')
         ),
     },
 }
+
+# ── Emoji cleanup: collapse runs and cap counts per platform ──────────────────
+_EMOJI_RE = re.compile(
+    '([\U0001F300-\U0001FAFF\U00002600-\U000027BF\U00002B00-\U00002BFF\U0001F1E6-\U0001F1FF])'
+)
+_EMOJI_CAP = {'X': 0, 'Telegram': 3, 'Instagram': 8}
+
+def clean_emojis(text, platform):
+    if not text:
+        return text
+    # collapse runs of 3+ identical emoji into a single instance
+    text = re.sub(r'(' + _EMOJI_RE.pattern + r')\1{2,}', r'\1', text)
+    cap = _EMOJI_CAP.get(platform)
+    if cap is None:
+        return text
+    seen = 0
+    out = []
+    for ch in text:
+        if _EMOJI_RE.fullmatch(ch):
+            if seen >= cap:
+                continue
+            seen += 1
+        out.append(ch)
+    return ''.join(out)
 
 # ── Brand visual tones for image generation ─────────────────────────────────
 BRAND_VISUAL_TONE = {
@@ -270,11 +330,13 @@ def call_apps_script(payload):
 
 # ── Route handlers ─────────────────────────────────────────────────────────────
 def handle_generate_copy(body):
-    article   = body.get('article', {})
-    platform  = body.get('platform', '')
-    media     = body.get('mediaBrand', '')
-    sentiment = body.get('sentiment', 'Neutral')
-    model_key = body.get('modelKey', 'gpt')   # 'gpt' | 'gemini' | 'claude'
+    article      = body.get('article', {})
+    platform     = body.get('platform', '')
+    media        = body.get('mediaBrand', '')
+    sentiment    = body.get('sentiment', 'Neutral')
+    model_key    = body.get('modelKey', 'gpt')   # 'gpt' | 'gemini' | 'claude'
+    sibling_copy = body.get('siblingCopy') or None
+    variant_count = max(1, min(3, body.get('variantCount', 2)))
 
     if not article or not platform or not media:
         raise ValueError('Missing article, platform, or mediaBrand')
@@ -291,7 +353,7 @@ def handle_generate_copy(body):
     )
 
     def call(extra=''):
-        sys_prompt = rule['system'](media, sentiment)
+        sys_prompt = rule['system'](media, sentiment, sibling_copy)
         if extra:
             sys_prompt += '\n' + extra
         msgs = [{'role': 'system', 'content': sys_prompt},
@@ -302,19 +364,32 @@ def handle_generate_copy(body):
         else:
             return openai_chat(msgs, rule['temperature'], rule['maxTokens'])
 
-    result   = call()
-    copy     = result.get('copy', '')
-    hashtags = result.get('hashtags', [])
+    variants = []
+    for i in range(variant_count):
+        result   = call()
+        copy     = clean_emojis(result.get('copy', ''), platform)
+        hashtags = result.get('hashtags', [])
 
-    if platform == 'X' and len(copy) > 280:
-        over   = len(copy)
-        result = call(f'IMPORTANT: Your previous attempt was {over} characters. You MUST fit within 280. Cut aggressively.')
-        copy     = result.get('copy', copy)
-        hashtags = result.get('hashtags', hashtags)
-        if len(copy) > 280:
-            copy = copy[:277] + '…'
+        if platform == 'X' and len(copy) > 280:
+            if i == 0:
+                # only the primary variant gets a costly retry round-trip
+                over   = len(copy)
+                result = call(f'IMPORTANT: Your previous attempt was {over} characters. You MUST fit within 280. Cut aggressively.')
+                copy     = clean_emojis(result.get('copy', copy), platform)
+                hashtags = result.get('hashtags', hashtags)
+            if len(copy) > 280:
+                copy = copy[:277] + '…'
 
-    return {'copy': copy, 'hashtags': hashtags, 'charCount': len(copy), 'platform': platform}
+        variants.append({'copy': copy, 'hashtags': hashtags})
+
+    primary = variants[0]
+    return {
+        'variants': variants,
+        'copy': primary['copy'],
+        'hashtags': primary['hashtags'],
+        'charCount': len(primary['copy']),
+        'platform': platform,
+    }
 
 
 def handle_generate_image(body):
@@ -545,19 +620,22 @@ def _repair_json(raw):
 import openai as _openai_sdk
 
 _openrouter_client = None
+_openrouter_client_lock = threading.Lock()
 def _get_openrouter_client():
     global _openrouter_client
     if _openrouter_client is None:
-        _openrouter_client = _openai_sdk.OpenAI(
-            base_url='https://openrouter.ai/api/v1',
-            api_key=OPENROUTER_KEY,
-            default_headers={
-                'HTTP-Referer': ORIGIN if ORIGIN != '*' else 'https://chainreporter.app',
-                'X-Title':      'ChainReporter Editorial AI',
-            },
-            timeout=180,
-            max_retries=3,
-        )
+        with _openrouter_client_lock:
+            if _openrouter_client is None:
+                _openrouter_client = _openai_sdk.OpenAI(
+                    base_url='https://openrouter.ai/api/v1',
+                    api_key=OPENROUTER_KEY,
+                    default_headers={
+                        'HTTP-Referer': ORIGIN if ORIGIN != '*' else 'https://chainreporter.app',
+                        'X-Title':      'ChainReporter Editorial AI',
+                    },
+                    timeout=180,
+                    max_retries=3,
+                )
     return _openrouter_client
 
 def openrouter_chat(model_id, messages, temperature=0.30, max_tokens=3500):
@@ -600,6 +678,12 @@ def _editorial_call_one(model_key, model_cfg, system_prompt, user_prompt):
 
 
 def handle_editorial_select(body):
+    """Generator — yields (model_key, result_dict) as each model finishes.
+
+    Validation (ValueError) happens before the first yield, so callers can
+    pull `next(gen)` to surface a clean 400 before committing to a streamed
+    response (HTTP headers can't be unsent once writing begins).
+    """
     shortlist      = body.get('shortlist', [])
     sel_media      = body.get('selectedMedia', [])
     sel_plats      = body.get('selectedPlatforms', ['X', 'Telegram', 'Instagram'])
@@ -628,7 +712,6 @@ def handle_editorial_select(body):
         sel_models  = body.get('selectedModels', list(EDITORIAL_MODELS.keys()))
         active_models = {k: v for k, v in EDITORIAL_MODELS.items() if k in sel_models}
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        results = {}
         # Thinking models (Gemini 2.5 Pro, etc.) consume tokens on internal reasoning
         # before generating output, so they need a higher cap even in test mode.
         THINKING_MODELS = {'gemini'}
@@ -638,9 +721,8 @@ def handle_editorial_select(body):
                 for k, v in active_models.items()
             }
             for fut in as_completed(futures):
-                key, data = fut.result()
-                results[key] = data
-        return results
+                yield fut.result()
+        return
 
     # Build compact article list for the prompt
     lines = []
@@ -711,17 +793,13 @@ def handle_editorial_select(body):
         active_models = EDITORIAL_MODELS  # fallback: use all
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    results = {}
     with ThreadPoolExecutor(max_workers=len(active_models)) as pool:
         futures = {
             pool.submit(_editorial_call_one, k, v, system_prompt, user_prompt): k
             for k, v in active_models.items()
         }
         for fut in as_completed(futures):
-            key, data = fut.result()
-            results[key] = data
-
-    return results
+            yield fut.result()
 
 
 # ── OpenAI Embedding filter pipeline handler ──────────────────────────────────
@@ -759,8 +837,15 @@ def handle_deepseek_filter(body):
 
 # ── HTTP Request Handler ───────────────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
     def log_message(self, fmt, *args):
-        print(f'[{self.command}] {self.path} — {args[1] if len(args) > 1 else ""}')
+        # self.command/self.path may be unset if the request line itself failed
+        # to parse (malformed/truncated request) — send_error() still logs in
+        # that case, so guard with getattr to avoid crashing the handler thread.
+        cmd  = getattr(self, 'command', '?')
+        path = getattr(self, 'path', '?')
+        print(f'[{cmd}] {path} — {args[1] if len(args) > 1 else ""}')
 
     def send_cors(self):
         self.send_header('Access-Control-Allow-Origin', ORIGIN)
@@ -770,6 +855,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_cors()
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
     def do_GET(self):
@@ -789,6 +875,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_cors()
                 self.send_header('Content-Type', r.headers.get('Content-Type', 'application/xml'))
+                accepts_gzip = 'gzip' in self.headers.get('Accept-Encoding', '')
+                if accepts_gzip and len(body) > 1024:
+                    body = gzip.compress(body)
+                    self.send_header('Content-Encoding', 'gzip')
                 self.send_header('Content-Length', len(body))
                 self.end_headers()
                 self.wfile.write(body)
@@ -800,6 +890,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get('Content-Length', 0))
         raw    = self.rfile.read(length)
+        if 'gzip' in self.headers.get('Content-Encoding', ''):
+            try:
+                raw = gzip.decompress(raw)
+            except OSError:
+                return self._error(400, 'Invalid request encoding')
         try:
             body = json.loads(raw) if raw else {}
         except json.JSONDecodeError:
@@ -824,7 +919,19 @@ class Handler(BaseHTTPRequestHandler):
             elif path == '/api/twitter/post':
                 self._json(handle_twitter_post(body))
             elif path == '/api/ai/editorial-select':
-                self._json(handle_editorial_select(body))
+                gen = handle_editorial_select(body)
+                first = next(gen)   # raises ValueError before any header is sent
+                try:
+                    self._stream_ndjson_start()
+                    self._stream_ndjson_write({first[0]: first[1]})
+                    for key, data in gen:
+                        self._stream_ndjson_write({key: data})
+                    self._stream_ndjson_end()
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    pass   # client disconnected mid-stream — headers already sent, nothing more to do
+                except Exception as e:
+                    print(f'[ERROR] editorial-select stream: {e}', file=sys.stderr)
+                return
             elif path == '/api/filter/pipeline':
                 self._json(handle_filter_pipeline(body))
             elif path == '/api/filter/deepseek':
@@ -846,12 +953,36 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_cors()
         self.send_header('Content-Type', 'application/json')
+        # Large AI responses (100s of KB) can stall mid-transfer on networks with
+        # MTU/PMTUD issues (VPNs, mobile, some ISPs). Gzip shrinks JSON ~70-85%,
+        # which both speeds delivery and avoids tripping that black hole.
+        accepts_gzip = 'gzip' in self.headers.get('Accept-Encoding', '')
+        if accepts_gzip and len(body) > 1024:
+            body = gzip.compress(body)
+            self.send_header('Content-Encoding', 'gzip')
         self.send_header('Content-Length', len(body))
         self.end_headers()
         self.wfile.write(body)
 
     def _error(self, code, msg):
         self._json({'error': msg}, code)
+
+    def _stream_ndjson_start(self):
+        self.send_response(200)
+        self.send_cors()
+        self.send_header('Content-Type', 'application/x-ndjson')
+        self.send_header('Transfer-Encoding', 'chunked')
+        self.end_headers()
+
+    def _stream_ndjson_write(self, obj):
+        line  = (json.dumps(obj, default=_json_default) + '\n').encode()
+        chunk = f'{len(line):x}\r\n'.encode() + line + b'\r\n'
+        self.wfile.write(chunk)
+        self.wfile.flush()
+
+    def _stream_ndjson_end(self):
+        self.wfile.write(b'0\r\n\r\n')
+        self.wfile.flush()
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -861,7 +992,8 @@ if __name__ == '__main__':
     if not SCRIPT_URL or SCRIPT_URL.startswith('PASTE_'):
         print('[WARN] GOOGLE_APPS_SCRIPT_URL not set — Sheets routes will fail', file=sys.stderr)
 
-    server = HTTPServer(('0.0.0.0', PORT), Handler)
+    server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
+    server.daemon_threads = True
     print(f'ChainReporter backend running at http://localhost:{PORT}')
     try:
         server.serve_forever()

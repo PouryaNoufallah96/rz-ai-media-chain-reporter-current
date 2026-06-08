@@ -3,6 +3,30 @@ import { useMmStore, API_BASE, MM_SOURCES, SRC_COLORS, EDITORIAL_MODEL_META, mke
 import { fetchRSS, parseRSS, filterByRecency, timeAgo } from '../utils/rss'
 import { preScore } from '../utils/scoring'
 
+// Gzip-compress the JSON body before sending (mirrors the gzip the backend
+// already applies to its responses) — large filter payloads (100s of KB of
+// articles) shrink ~70-85%, avoiding the same MTU-stall risk on upload.
+// Falls back to plain JSON on browsers without CompressionStream.
+async function postJSON(url, obj) {
+  if (typeof CompressionStream !== 'undefined') {
+    try {
+      const bytes  = new TextEncoder().encode(JSON.stringify(obj))
+      const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))
+      const body   = await new Response(stream).arrayBuffer()
+      return await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
+        body,
+      })
+    } catch (_) { /* fall through to uncompressed */ }
+  }
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(obj),
+  })
+}
+
 export function useAnalyzeAndRoute() {
   const store = useMmStore()
 
@@ -19,21 +43,27 @@ export function useAnalyzeAndRoute() {
     setErrorMsg('')
 
     try {
-      // ── Phase 1: RSS Fetch ──
-      const allArticles = []
+      // ── Phase 1: RSS Fetch (parallel — total time ≈ slowest source, not the sum) ──
       const sourceCounts = {}
       selectedSources.forEach(s => { sourceCounts[s] = 0 })
-      for (let i = 0; i < selectedSources.length; i++) {
-        const name = selectedSources[i], url = MM_SOURCES[name]
-        if (!url) continue
-        setProgress(5 + Math.round((i / selectedSources.length) * 35), `Fetching ${name}…`)
+      let fetchedCount = 0
+      const perSource = await Promise.allSettled(selectedSources.map(async name => {
+        const url = MM_SOURCES[name]
+        if (!url) return []
         try {
           const xml  = await fetchRSS(url)
           const arts = parseRSS(xml, name)
-          allArticles.push(...arts.slice(0, 15))
           sourceCounts[name] = arts.length
-        } catch(e) { console.warn(`Skip ${name}:`, e.message) }
-      }
+          return arts.slice(0, 15)
+        } catch(e) {
+          console.warn(`Skip ${name}:`, e.message)
+          return []
+        } finally {
+          fetchedCount++
+          setProgress(5 + Math.round((fetchedCount / selectedSources.length) * 35), `Fetched ${fetchedCount}/${selectedSources.length} sources…`)
+        }
+      }))
+      const allArticles = perSource.flatMap(r => r.status === 'fulfilled' ? r.value : [])
       if (!allArticles.length) throw new Error('Could not load any feeds. Check your connection.')
 
       const tooOldCount = allArticles.length - allArticles.filter(a => {
@@ -54,10 +84,7 @@ export function useAnalyzeAndRoute() {
 
       if (filterMode === 'openai_embedding') {
         setProgress(48, `Running OpenAI Embedding pipeline on ${recent.length} articles…`)
-        const r = await fetch(`${API_BASE}/api/filter/pipeline`, {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ articles:recent, selectedMedia, topics, recencyHours }),
-        })
+        const r = await postJSON(`${API_BASE}/api/filter/pipeline`, { articles:recent, selectedMedia, topics, recencyHours })
         if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e?.error||`Filter failed (${r.status})`) }
         const fd = await r.json()
         if (!fd.shortlist?.length) throw new Error('OpenAI Embedding: no articles passed. Try wider range.')
@@ -67,10 +94,7 @@ export function useAnalyzeAndRoute() {
 
       } else if (filterMode === 'deepseek_preprocess') {
         setProgress(48, `Sending ${recent.length} articles to DeepSeek V4 Flash…`)
-        const r = await fetch(`${API_BASE}/api/filter/deepseek`, {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ articles:recent, selectedMedia, topics, recencyHours }),
-        })
+        const r = await postJSON(`${API_BASE}/api/filter/deepseek`, { articles:recent, selectedMedia, topics, recencyHours })
         if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e?.error||`DeepSeek filter failed (${r.status})`) }
         const fd = await r.json()
         if (!fd.shortlist?.length) throw new Error('DeepSeek Pre-Process: no articles passed.')
@@ -127,27 +151,21 @@ export function useAnalyzeAndRoute() {
 
       setProgress(62, `Sending ${shortlistPayload.length} articles to ${selectedModels.length} AI editor${selectedModels.length===1?'':'s'}…`)
 
-      // ── Phase 3: Editorial AI ──
-      const editRes = await fetch(`${API_BASE}/api/ai/editorial-select`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ shortlist:shortlistPayload, selectedMedia, selectedPlatforms, selectedModels, topics, testMode }),
-      })
+      // ── Phase 3: Editorial AI (streamed — lanes populate as each model finishes) ──
+      const editRes = await postJSON(`${API_BASE}/api/ai/editorial-select`, { shortlist:shortlistPayload, selectedMedia, selectedPlatforms, selectedModels, topics, testMode })
       if (!editRes.ok) { const e = await editRes.json().catch(()=>({})); throw new Error(e?.error||`Editorial AI failed (${editRes.status})`) }
-      const editorial = await editRes.json()
-      setEditorial(editorial)
 
-      // ── Phase 4: Build lanes ──
       const lastShortlist = useMmStore.getState().lastShortlist
-      const modelLanes = {}
-      selectedModels.forEach(key => {
-        const data = editorial?.[key], meta = EDITORIAL_MODEL_META[key], brands = data?.brands||{}
-        modelLanes[key] = {}
+
+      const buildLanesForModel = (key, data) => {
+        const meta = EDITORIAL_MODEL_META[key], brands = data?.brands||{}
+        const lanes = {}
         selectedMedia.forEach(brand => {
-          modelLanes[key][brand] = [];
+          lanes[brand] = [];
           (brands[brand]||[]).forEach((a,rank) => {
             const src = lastShortlist[a.input_index]||{}, srcCol=SRC_COLORS[a.source]||'#7a8499'
             const init=(a.source||'').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
-            modelLanes[key][brand].push({
+            lanes[brand].push({
               id:`${key}-${mkey(brand)}-${a.input_index}-${rank}`,
               _modelKey:key, _modelDisplay:meta?.display, _modelColor:meta?.color,
               media:brand, platform:'suggested', source:a.source||'', initials:init, srcColor:srcCol,
@@ -161,8 +179,33 @@ export function useAnalyzeAndRoute() {
             })
           })
         })
-      })
-      setModelLanes(modelLanes)
+        return lanes
+      }
+
+      const editorial = {}
+      const total = selectedModels.length
+      let completed = 0
+      const reader = editRes.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (value) buf += decoder.decode(value, { stream: true })
+        let nl
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl).trim()
+          buf = buf.slice(nl + 1)
+          if (!line) continue
+          const entry = JSON.parse(line)
+          const [key, data] = Object.entries(entry)[0]
+          editorial[key] = data
+          completed++
+          setProgress(62 + Math.round((completed/total)*30), `${EDITORIAL_MODEL_META[key]?.display||key} ready (${completed}/${total})…`)
+          setModelLanes({ ...useMmStore.getState().modelLanes, [key]: buildLanesForModel(key, data) })
+        }
+        if (done) break
+      }
+      setEditorial(editorial)
 
       const platformLanes = {}
       selectedMedia.forEach(brand => { platformLanes[brand]={}; selectedPlatforms.forEach(p=>{platformLanes[brand][p]=[]}) })
