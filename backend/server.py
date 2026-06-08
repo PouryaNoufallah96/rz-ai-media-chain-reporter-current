@@ -320,6 +320,14 @@ def handle_generate_copy(body):
         cfg = EDITORIAL_MODELS.get(model_key, EDITORIAL_MODELS['gpt'])
         return openrouter_chat(cfg['id'], msgs, rule['temperature'], rule['maxTokens'])
 
+    def safe_call(extra=''):
+        """One retry on a malformed/unparseable model response — most JSON misses are one-off hiccups,
+        and a single bad variant shouldn't fail the whole batch (the user sees 'nothing generated')."""
+        try:
+            return call(extra)
+        except ValueError:
+            return call(extra)
+
     angles = rule.get('variant_angles')
 
     def _enforce_length(copy, hashtags, extra=''):
@@ -334,7 +342,11 @@ def handle_generate_copy(body):
             note = f'Your previous attempt was only {n} characters — too short. This format requires {lo}-{hi} characters; add more relevant detail or context (do not invent facts) to reach at least {lo}.'
         else:
             note = f'Your previous attempt was {n} characters — too long. This format requires at most {hi} characters; tighten it without dropping the key facts.'
-        result   = call(f'{extra}\nIMPORTANT: {note}'.strip())
+        try:
+            result = safe_call(f'{extra}\nIMPORTANT: {note}'.strip())
+        except ValueError:
+            # Couldn't get a usable re-roll — keep the original draft rather than losing the variant.
+            return copy, hashtags
         copy     = clean_emojis(result.get('copy', copy), platform)
         hashtags = result.get('hashtags', hashtags)
         if len(copy) > hi:
@@ -345,11 +357,20 @@ def handle_generate_copy(body):
     if angles:
         # Each angle is a distinct, intentional framing — generate exactly one variant per angle.
         for angle in angles:
-            result   = call(angle['instruction'])
-            copy     = clean_emojis(result.get('copy', ''), platform)
-            hashtags = result.get('hashtags', [])
-            copy, hashtags = _enforce_length(copy, hashtags, angle['instruction'])
+            try:
+                result   = safe_call(angle['instruction'])
+                copy     = clean_emojis(result.get('copy', ''), platform)
+                hashtags = result.get('hashtags', [])
+                copy, hashtags = _enforce_length(copy, hashtags, angle['instruction'])
+            except ValueError as e:
+                # This one angle never produced a usable response — skip it rather than
+                # failing the whole request (the user would otherwise see nothing generated).
+                print(f'[copy/generate] dropped {platform}/{angle["label"]} variant: {e}', file=sys.stderr)
+                continue
             variants.append({'copy': copy, 'hashtags': hashtags, 'label': angle['label']})
+
+        if not variants:
+            raise ValueError(f'{platform} copy generation failed for all variants — try again')
     else:
         for i in range(variant_count):
             result   = call()
@@ -571,6 +592,11 @@ def _repair_json(raw):
                 return json.loads(candidate + ending)
             except json.JSONDecodeError:
                 pass
+
+    # Model ignored the "respond with JSON" instruction and just wrote the post directly —
+    # if there's no '{' anywhere, there's no JSON to recover; treat the prose itself as the copy.
+    if '{' not in raw and raw.strip():
+        return {'copy': raw.strip(), 'hashtags': []}
 
     preview = raw[:300].replace('\n', ' ')
     print(f'[JSON REPAIR FAILED] len={len(raw)} preview: {preview}', file=sys.stderr)
