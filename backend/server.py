@@ -150,12 +150,13 @@ PLAT_RULES = {
         ],
     },
     'Telegram': {
-        'maxChars': 4096, 'maxTokens': 700, 'temperature': 0.5,
+        'minChars': 300, 'maxChars': 600, 'maxTokens': 700, 'temperature': 0.5,
         'emoji_policy': 'sparing, structural — e.g. 📌 for bullet markers, 🚨 only for genuinely breaking news',
         'system': lambda brand, sent, sibling_copy=None: (
             f'You are the Telegram channel editor for {brand}, writing for an audience that wants the full story without leaving the app. Sentiment: {sent}.\n'
             'PERSONA: a newswire desk — calm, thorough, slightly more candid than the brand\'s public tweets.\n'
             'STRUCTURE: a bold headline line, then a short body (2-3 tight paragraphs covering what happened, why it matters, and what to watch), then optional 📌 bullet points for key figures/dates, then a closing source-attribution line.\n'
+            'HARD RULE: response must be 300-600 characters total, including spaces, line breaks, emoji and hashtags.\n'
             'EMOJI POLICY: sparing and structural — 📌 for bullets, 🚨 only for breaking news, nothing decorative.\n'
             f'Suggested topic→emoji anchors (use only if relevant, never force them): {_EMOJI_HINT}.\n'
             f'{_FACT_RULE}\n'
@@ -321,16 +322,23 @@ def handle_generate_copy(body):
 
     angles = rule.get('variant_angles')
 
-    def _fit_to_x(copy, hashtags, extra=''):
-        """Re-roll (with optional extra steering) until ≤280 chars, then hard-truncate as last resort."""
-        if platform != 'X' or len(copy) <= 280:
+    def _enforce_length(copy, hashtags, extra=''):
+        """Re-roll toward the platform's char-count bounds; hard-truncate over the max as a last resort."""
+        lo, hi = rule.get('minChars'), rule.get('maxChars')
+        if hi is None:
             return copy, hashtags
-        over    = len(copy)
-        result  = call(f'{extra}\nIMPORTANT: Your previous attempt was {over} characters. You MUST fit within 280. Cut aggressively.'.strip())
-        copy    = clean_emojis(result.get('copy', copy), platform)
+        n = len(copy)
+        if n <= hi and (lo is None or n >= lo):
+            return copy, hashtags
+        if lo is not None and n < lo:
+            note = f'Your previous attempt was only {n} characters — too short. This format requires {lo}-{hi} characters; add more relevant detail or context (do not invent facts) to reach at least {lo}.'
+        else:
+            note = f'Your previous attempt was {n} characters — too long. This format requires at most {hi} characters; tighten it without dropping the key facts.'
+        result   = call(f'{extra}\nIMPORTANT: {note}'.strip())
+        copy     = clean_emojis(result.get('copy', copy), platform)
         hashtags = result.get('hashtags', hashtags)
-        if len(copy) > 280:
-            copy = smart_truncate(copy, 280)
+        if len(copy) > hi:
+            copy = smart_truncate(copy, hi)
         return copy, hashtags
 
     variants = []
@@ -340,21 +348,13 @@ def handle_generate_copy(body):
             result   = call(angle['instruction'])
             copy     = clean_emojis(result.get('copy', ''), platform)
             hashtags = result.get('hashtags', [])
-            copy, hashtags = _fit_to_x(copy, hashtags, angle['instruction'])
+            copy, hashtags = _enforce_length(copy, hashtags, angle['instruction'])
             variants.append({'copy': copy, 'hashtags': hashtags, 'label': angle['label']})
     else:
         for i in range(variant_count):
             result   = call()
             copy     = clean_emojis(result.get('copy', ''), platform)
             hashtags = result.get('hashtags', [])
-
-            if platform == 'X' and len(copy) > 280:
-                if i == 0:
-                    # only the primary variant gets a costly retry round-trip
-                    copy, hashtags = _fit_to_x(copy, hashtags)
-                else:
-                    copy = smart_truncate(copy, 280)
-
             variants.append({'copy': copy, 'hashtags': hashtags})
 
     primary = variants[0]
