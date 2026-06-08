@@ -128,7 +128,7 @@ def _sibling_block(sibling_copy, other_label):
 
 PLAT_RULES = {
     'X': {
-        'maxChars': 280, 'maxTokens': 180, 'temperature': 0.35,
+        'maxChars': 280, 'maxTokens': 500, 'temperature': 0.35,
         'emoji_policy': 'none — zero emojis, journalist tone only',
         'system': lambda brand, sent, sibling_copy=None: (
             f'You are the senior social media editor for {brand}, a premium crypto news brand, known for scroll-stopping one-liners. Sentiment: {sent}.\n'
