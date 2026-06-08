@@ -1,8 +1,7 @@
 # ── ChainReporter API Keys ─────────────────────────────────────────────────────
 # Fill in your values below, then run: docker compose up --build
 
-# ── AI Models ──────────────────────────────────────────────────────────────────
-OPENAI_API_KEY=
+# ── AI Models (all routed through OpenRouter) ─────────────────────────────────
 OPENROUTER_API_KEY=
 
 # ── Google ─────────────────────────────────────────────────────────────────────

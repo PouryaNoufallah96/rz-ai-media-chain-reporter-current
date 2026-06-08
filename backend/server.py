@@ -1,6 +1,6 @@
 """
 ChainReporter Backend — Python 3.11
-Runs on port 3001. Proxies all OpenAI and Google Apps Script calls server-side.
+Runs on port 3001. Proxies all OpenRouter (AI) and Google Apps Script calls server-side.
 Start: python server.py
 """
 
@@ -59,7 +59,6 @@ if ENV_PATH.exists():
             k, _, v = line.partition('=')
             os.environ.setdefault(k.strip(), v.strip())
 
-OPENAI_KEY      = os.environ.get('OPENAI_API_KEY', '')
 SCRIPT_URL      = os.environ.get('GOOGLE_APPS_SCRIPT_URL', '')
 PORT            = int(os.environ.get('PORT', 3001))
 ORIGIN          = os.environ.get('FRONTEND_ORIGIN', '*')
@@ -73,13 +72,9 @@ TELEGRAM_CHANNEL = os.environ.get('TELEGRAM_CHANNEL', '@chainreporternews')
 TELEGRAM_PROXY   = os.environ.get('TELEGRAM_PROXY', '')   # e.g. http://127.0.0.1:10808
 DRIVE_FOLDER_URL = os.environ.get('GOOGLE_DRIVE_FOLDER_URL', '')
 
-OPENAI_CHAT     = 'https://api.openai.com/v1/chat/completions'
-OPENAI_IMAGE    = 'https://api.openai.com/v1/images/generations'
 OPENROUTER_URL  = 'https://openrouter.ai/api/v1/chat/completions'
 
-# ── Editorial AI models ────────────────────────────────────────────────────────
-# 'api': 'openai'    → calls OpenAI directly (uses OPENAI_KEY)
-# 'api': 'openrouter' → calls OpenRouter (uses OPENROUTER_KEY)
+# ── Editorial AI models (all routed through OpenRouter) ───────────────────────
 EDITORIAL_MODELS = {
     'gpt': {
         'id':          'openai/gpt-5.5',
@@ -216,60 +211,6 @@ BRAND_VISUAL_TONE = {
     'Meta Coin Guard': 'security-focused, dark red and black, cybersecurity intelligence, shield motifs',
 }
 
-# ── OpenAI helpers ─────────────────────────────────────────────────────────────
-def openai_chat(messages, temperature, max_tokens, model='gpt-4o-mini'):
-    if not OPENAI_KEY:
-        raise ValueError('OPENAI_API_KEY not set in .env')
-    r = requests.post(OPENAI_CHAT, json={
-        'model': model,
-        'temperature': temperature,
-        'max_tokens': max_tokens,
-        'response_format': {'type': 'json_object'},
-        'messages': messages,
-    }, headers={'Authorization': f'Bearer {OPENAI_KEY}'}, timeout=120)
-    r.raise_for_status()
-    return _repair_json(r.json()['choices'][0]['message']['content'])
-
-def openai_image(prompt, model='dall-e-3', size='1792x1024'):
-    if not OPENAI_KEY:
-        raise ValueError('OPENAI_API_KEY not set in .env')
-    is_gpt_image = model.startswith('gpt-image') or model.startswith('chatgpt-image')
-    if is_gpt_image:
-        payload = {
-            'model':   model,
-            'prompt':  prompt,
-            'n':       1,
-            'size':    '1536x1024',
-            'quality': 'high',
-        }
-    elif model == 'dall-e-2':
-        payload = {
-            'model':           model,
-            'prompt':          prompt,
-            'n':               1,
-            'size':            '1024x1024',
-            'response_format': 'b64_json',
-        }
-    else:  # dall-e-3
-        payload = {
-            'model':           model,
-            'prompt':          prompt,
-            'n':               1,
-            'size':            size,
-            'quality':         'hd',
-            'response_format': 'b64_json',
-        }
-    r = requests.post(OPENAI_IMAGE, json=payload,
-                      headers={'Authorization': f'Bearer {OPENAI_KEY}'}, timeout=120)
-    r.raise_for_status()
-    item = r.json()['data'][0]
-    if 'b64_json' in item:
-        return item['b64_json']
-    # gpt-image family may return a URL — fetch and convert
-    img_r = requests.get(item['url'], timeout=60)
-    img_r.raise_for_status()
-    return base64.b64encode(img_r.content).decode()
-
 # ── OpenRouter image generation ───────────────────────────────────────────────
 # Models that use the OpenRouter chat/completions endpoint with modalities:["image"]
 OPENROUTER_IMAGE_MODELS = {
@@ -358,11 +299,8 @@ def handle_generate_copy(body):
             sys_prompt += '\n' + extra
         msgs = [{'role': 'system', 'content': sys_prompt},
                 {'role': 'user',   'content': user_msg}]
-        if model_key in ('gemini', 'claude'):
-            cfg = EDITORIAL_MODELS[model_key]
-            return openrouter_chat(cfg['id'], msgs, rule['temperature'], rule['maxTokens'])
-        else:
-            return openai_chat(msgs, rule['temperature'], rule['maxTokens'])
+        cfg = EDITORIAL_MODELS.get(model_key, EDITORIAL_MODELS['gpt'])
+        return openrouter_chat(cfg['id'], msgs, rule['temperature'], rule['maxTokens'])
 
     variants = []
     for i in range(variant_count):
@@ -397,8 +335,7 @@ def handle_generate_image(body):
     platform  = body.get('platform', 'X')
     media     = body.get('mediaBrand', 'ChainReporter')
     sentiment = body.get('sentiment', 'Neutral')
-    model     = body.get('model', 'dall-e-3')
-    size      = body.get('size', '1792x1024')
+    model     = body.get('model', 'openai/gpt-5.4-image-2')
 
     tone     = BRAND_VISUAL_TONE.get(media, 'premium crypto news, dark cinematic aesthetic')
     sent_tone = ('optimistic upward energy, green tones' if sentiment == 'Bullish'
@@ -414,21 +351,8 @@ def handle_generate_image(body):
         'Style: professional financial journalism photography, ultra-high-detail, dramatic lighting.'
     )
 
-    if model in OPENROUTER_IMAGE_MODELS:
-        image_b64 = openrouter_image(prompt, model)
-    else:
-        image_b64 = openai_image(prompt, model, size)
+    image_b64 = openrouter_image(prompt, model)
     return {'imageB64': image_b64, 'prompt': prompt, 'model': model}
-
-
-def handle_proxy_chat(body):
-    """Generic proxy — frontend sends full OpenAI-shaped request, backend adds the key."""
-    if not OPENAI_KEY:
-        raise ValueError('OPENAI_API_KEY not set in .env')
-    r = requests.post(OPENAI_CHAT, json=body,
-                      headers={'Authorization': f'Bearer {OPENAI_KEY}'}, timeout=120)
-    r.raise_for_status()
-    return r.json()
 
 
 def handle_sheets(action, body):
@@ -660,10 +584,7 @@ def _editorial_call_one(model_key, model_cfg, system_prompt, user_prompt):
     msgs = [{'role': 'system', 'content': system_prompt},
             {'role': 'user',   'content': user_prompt}]
     try:
-        if model_cfg.get('api') == 'openai':
-            result = openai_chat(msgs, model_cfg['temperature'], model_cfg['max_tokens'], model=model_cfg['id'])
-        else:
-            result = openrouter_chat(model_cfg['id'], msgs, model_cfg['temperature'], model_cfg['max_tokens'])
+        result = openrouter_chat(model_cfg['id'], msgs, model_cfg['temperature'], model_cfg['max_tokens'])
         return model_key, {
             'model':  model_cfg['display'],
             'brands': result.get('brands', {}),
@@ -802,7 +723,7 @@ def handle_editorial_select(body):
             yield fut.result()
 
 
-# ── OpenAI Embedding filter pipeline handler ──────────────────────────────────
+# ── Embedding filter pipeline handler ──────────────────────────────────────────
 def handle_filter_pipeline(body):
     if not _FILTERING_AVAILABLE:
         raise ValueError('filtering package not installed (pip install numpy)')
@@ -902,9 +823,7 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             path = self.path.rstrip('/')
-            if path == '/api/proxy/chat':
-                self._json(handle_proxy_chat(body))
-            elif path == '/api/copy/generate':
+            if path == '/api/copy/generate':
                 self._json(handle_generate_copy(body))
             elif path == '/api/image/generate':
                 self._json(handle_generate_image(body))
@@ -987,8 +906,8 @@ class Handler(BaseHTTPRequestHandler):
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    if not OPENAI_KEY:
-        print('[WARN] OPENAI_API_KEY not set — AI routes will fail', file=sys.stderr)
+    if not OPENROUTER_KEY:
+        print('[WARN] OPENROUTER_API_KEY not set — AI routes will fail', file=sys.stderr)
     if not SCRIPT_URL or SCRIPT_URL.startswith('PASTE_'):
         print('[WARN] GOOGLE_APPS_SCRIPT_URL not set — Sheets routes will fail', file=sys.stderr)
 
