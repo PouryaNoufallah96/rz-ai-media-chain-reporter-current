@@ -17,7 +17,7 @@ export default function EditorialCard({ card, onDragStart }) {
   const platformLanes = useMmStore(s => s.platformLanes)
   const modelLanes = useMmStore(s => s.modelLanes)
   const setPlatformLanes = useMmStore(s => s.setPlatformLanes)
-  const updateCard = useMmStore(s => s.updateCard)
+  const updatePlatformCard = useMmStore(s => s.updatePlatformCard)
   const getCachedCopy = useMmStore(s => s.getCachedCopy)
   const setCachedCopy = useMmStore(s => s.setCachedCopy)
 
@@ -43,7 +43,7 @@ export default function EditorialCard({ card, onDragStart }) {
 
   function sendTo(plat) {
     if (routedPlatforms.includes(plat)) return
-    routeCardToPlatform(card.id, plat, card.media, { modelLanes, platformLanes, setPlatformLanes, updateCard, getCachedCopy, setCachedCopy })
+    routeCardToPlatform(card.id, plat, card.media, { modelLanes, platformLanes, setPlatformLanes, updatePlatformCard, getCachedCopy, setCachedCopy })
   }
 
   return (

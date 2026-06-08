@@ -30,7 +30,7 @@ function ModelLane({ modelKey, brand }) {
 }
 
 function PlatformLane({ brand, plat }) {
-  const { platformLanes, modelLanes, setPlatformLanes, updateCard, getCachedCopy, setCachedCopy } = useMmStore()
+  const { platformLanes, modelLanes, setPlatformLanes, updatePlatformCard, getCachedCopy, setCachedCopy } = useMmStore()
   const col = PLAT_COLORS[plat] || '#7a8499'
   const cards = platformLanes[brand]?.[plat] || []
 
@@ -40,7 +40,7 @@ function PlatformLane({ brand, plat }) {
     if (!cardId) return
     e.currentTarget.classList.remove('drag-over')
     _dragCardId = null
-    routeCardToPlatform(cardId, plat, brand, { modelLanes, platformLanes, setPlatformLanes, updateCard, getCachedCopy, setCachedCopy })
+    routeCardToPlatform(cardId, plat, brand, { modelLanes, platformLanes, setPlatformLanes, updatePlatformCard, getCachedCopy, setCachedCopy })
   }
 
   const PlatIcons = {

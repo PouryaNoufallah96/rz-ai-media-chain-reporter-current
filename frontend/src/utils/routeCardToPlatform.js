@@ -6,10 +6,10 @@ const PLAT_REASONS = {
   Instagram: 'Strong opening hook · 5–10 hashtags',
 }
 
-export async function generatePlatformCopy(card, platform, { updateCard, getCachedCopy, setCachedCopy, siblingCopy }) {
+export async function generatePlatformCopy(card, platform, { updatePlatformCard, getCachedCopy, setCachedCopy, siblingCopy }) {
   const modelKey = card._modelKey || 'gpt'
   const cached = getCachedCopy(card.id, platform, modelKey)
-  if (cached) { updateCard(card.id, cached); return }
+  if (cached) { updatePlatformCard(card.id, platform, cached); return }
 
   try {
     const body = { article:{title:card.headline,source:card.source,desc:card.copy,matchedKeywords:card.hashtags||[]}, platform, mediaBrand:card.media, sentiment:card.sentiment||'Neutral', modelKey }
@@ -27,12 +27,12 @@ export async function generatePlatformCopy(card, platform, { updateCard, getCach
       platReason: PLAT_REASONS[platform] || `Formatted for ${platform}`,
     }
     setCachedCopy(card.id, platform, modelKey, payload)
-    updateCard(card.id, payload)
+    updatePlatformCard(card.id, platform, payload)
   } catch (e) { console.warn('Platform copy failed:', e.message) }
 }
 
 export function routeCardToPlatform(cardId, targetPlatform, targetBrand, storeBag) {
-  const { modelLanes, platformLanes, setPlatformLanes, updateCard, getCachedCopy, setCachedCopy } = storeBag
+  const { modelLanes, platformLanes, setPlatformLanes, updatePlatformCard, getCachedCopy, setCachedCopy } = storeBag
   if ((platformLanes[targetBrand]?.[targetPlatform] || []).some(c => c.id === cardId)) return   // already routed here — no-op
 
   let siblingCopy = null
@@ -52,7 +52,7 @@ export function routeCardToPlatform(cardId, targetPlatform, targetBrand, storeBa
         if (!newPl[brand][targetPlatform]) newPl[brand][targetPlatform] = []
         newPl[brand][targetPlatform].push(routed)
         setPlatformLanes(newPl)
-        generatePlatformCopy(routed, targetPlatform, { updateCard, getCachedCopy, setCachedCopy, siblingCopy })
+        generatePlatformCopy(routed, targetPlatform, { updatePlatformCard, getCachedCopy, setCachedCopy, siblingCopy })
         return
       }
     }
@@ -77,5 +77,5 @@ export function routeCardToPlatform(cardId, targetPlatform, targetBrand, storeBa
   if (!pl[targetBrand][targetPlatform]) pl[targetBrand][targetPlatform] = []
   pl[targetBrand][targetPlatform].push(card)
   setPlatformLanes(pl)
-  generatePlatformCopy(card, targetPlatform, { updateCard, getCachedCopy, setCachedCopy, siblingCopy })
+  generatePlatformCopy(card, targetPlatform, { updatePlatformCard, getCachedCopy, setCachedCopy, siblingCopy })
 }

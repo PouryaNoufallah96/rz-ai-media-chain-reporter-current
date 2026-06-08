@@ -38,7 +38,7 @@ async function sendToX(card, imageB64) {
 }
 
 export default function PreviewPanel() {
-  const { activeCard, setActiveCard, updateCardStatus, updateCard } = useMmStore()
+  const { activeCard, setActiveCard, updateCardStatus, updatePlatformCard } = useMmStore()
   const card = activeCard
   const isOpen = !!card
 
@@ -227,7 +227,7 @@ export default function PreviewPanel() {
                 {card.variants.map((v,i)=>(
                   <div key={i} onClick={()=>{
                       setSelectedVariant(i); setCopyText(v.copy)
-                      updateCard(card.id, { copy:v.copy, hashtags:v.hashtags, charCount:v.copy.length })
+                      updatePlatformCard(card.id, card.platform, { copy:v.copy, hashtags:v.hashtags, charCount:v.copy.length })
                     }}
                     style={{cursor:'pointer',padding:'7px 10px',borderRadius:7,
                       border:`1px solid ${i===selectedVariant?pc+'70':'rgba(255,255,255,.08)'}`,

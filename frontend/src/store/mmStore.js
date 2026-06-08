@@ -176,6 +176,23 @@ export const useMmStore = create((set, get) => ({
     return { activeCard, modelLanes, platformLanes }
   }),
 
+  // Like updateCard, but scoped to a single platform — the same article can be routed to
+  // multiple platform lanes under the same card id, each with its own generated copy/variants;
+  // matching on id alone would leak one platform's copy onto another's lane-card.
+  updatePlatformCard: (cardId, platform, extra = {}) => set(s => {
+    const matches = c => c.id === cardId && c.platform === platform
+    const activeCard = (s.activeCard && matches(s.activeCard)) ? { ...s.activeCard, ...extra } : s.activeCard
+    const platformLanes = { ...s.platformLanes }
+    Object.keys(platformLanes).forEach(brand => {
+      const lanes = { ...platformLanes[brand] }
+      Object.keys(lanes).forEach(plat => {
+        lanes[plat] = lanes[plat].map(c => matches(c) ? { ...c, ...extra } : c)
+      })
+      platformLanes[brand] = lanes
+    })
+    return { activeCard, platformLanes }
+  }),
+
   getCachedCopy: (articleId, platform, modelKey) => get().copyCache[cacheKey(articleId, platform, modelKey)] || null,
   setCachedCopy: (articleId, platform, modelKey, payload) => set(s => ({
     copyCache: { ...s.copyCache, [cacheKey(articleId, platform, modelKey)]: payload }
