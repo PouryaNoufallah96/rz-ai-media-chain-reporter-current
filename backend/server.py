@@ -143,6 +143,11 @@ PLAT_RULES = {
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1","#Tag2"] }'
             + _sibling_block(sibling_copy, 'X')
         ),
+        'variant_angles': [
+            {'label': 'Breaking', 'instruction': 'ANGLE: lead with urgency and the key number — one scroll-stopping hook framed as urgent, breaking news.'},
+            {'label': 'Question', 'instruction': 'ANGLE: open or close with one genuine question that invites replies — make the reader want to respond, not just read.'},
+            {'label': 'Take',     'instruction': 'ANGLE: one confident, opinionated-but-factual framing — sharp analysis, not hype.'},
+        ],
     },
     'Telegram': {
         'maxChars': 4096, 'maxTokens': 700, 'temperature': 0.5,
@@ -160,6 +165,11 @@ PLAT_RULES = {
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1"] }'
             + _sibling_block(sibling_copy, 'X')
         ),
+        'variant_angles': [
+            {'label': 'Newswire',   'instruction': 'ANGLE: strict newswire brief — bold headline, 2-3 factual sentences, source line. No opinion or interpretation.'},
+            {'label': 'Analysis',   'instruction': 'ANGLE: calm analytical tone — explain what this means and why it matters, more interpretive than a wire brief.'},
+            {'label': 'Key points', 'instruction': 'ANGLE: bold headline followed by 3 concise 📌 bullet points covering the key figures/facts, then a closing source line.'},
+        ],
     },
     'Instagram': {
         'maxChars': 2200, 'maxTokens': 700, 'temperature': 0.4,
@@ -302,23 +312,43 @@ def handle_generate_copy(body):
         cfg = EDITORIAL_MODELS.get(model_key, EDITORIAL_MODELS['gpt'])
         return openrouter_chat(cfg['id'], msgs, rule['temperature'], rule['maxTokens'])
 
+    angles = rule.get('variant_angles')
+
+    def _fit_to_x(copy, hashtags, extra=''):
+        """Re-roll (with optional extra steering) until ≤280 chars, then hard-truncate as last resort."""
+        if platform != 'X' or len(copy) <= 280:
+            return copy, hashtags
+        over    = len(copy)
+        result  = call(f'{extra}\nIMPORTANT: Your previous attempt was {over} characters. You MUST fit within 280. Cut aggressively.'.strip())
+        copy    = clean_emojis(result.get('copy', copy), platform)
+        hashtags = result.get('hashtags', hashtags)
+        if len(copy) > 280:
+            copy = copy[:277] + '…'
+        return copy, hashtags
+
     variants = []
-    for i in range(variant_count):
-        result   = call()
-        copy     = clean_emojis(result.get('copy', ''), platform)
-        hashtags = result.get('hashtags', [])
+    if angles:
+        # Each angle is a distinct, intentional framing — generate exactly one variant per angle.
+        for angle in angles:
+            result   = call(angle['instruction'])
+            copy     = clean_emojis(result.get('copy', ''), platform)
+            hashtags = result.get('hashtags', [])
+            copy, hashtags = _fit_to_x(copy, hashtags, angle['instruction'])
+            variants.append({'copy': copy, 'hashtags': hashtags, 'label': angle['label']})
+    else:
+        for i in range(variant_count):
+            result   = call()
+            copy     = clean_emojis(result.get('copy', ''), platform)
+            hashtags = result.get('hashtags', [])
 
-        if platform == 'X' and len(copy) > 280:
-            if i == 0:
-                # only the primary variant gets a costly retry round-trip
-                over   = len(copy)
-                result = call(f'IMPORTANT: Your previous attempt was {over} characters. You MUST fit within 280. Cut aggressively.')
-                copy     = clean_emojis(result.get('copy', copy), platform)
-                hashtags = result.get('hashtags', hashtags)
-            if len(copy) > 280:
-                copy = copy[:277] + '…'
+            if platform == 'X' and len(copy) > 280:
+                if i == 0:
+                    # only the primary variant gets a costly retry round-trip
+                    copy, hashtags = _fit_to_x(copy, hashtags)
+                else:
+                    copy = copy[:277] + '…'
 
-        variants.append({'copy': copy, 'hashtags': hashtags})
+            variants.append({'copy': copy, 'hashtags': hashtags})
 
     primary = variants[0]
     return {

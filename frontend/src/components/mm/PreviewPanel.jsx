@@ -229,12 +229,20 @@ export default function PreviewPanel() {
                       setSelectedVariant(i); setCopyText(v.copy)
                       updateCard(card.id, { copy:v.copy, hashtags:v.hashtags, charCount:v.copy.length })
                     }}
-                    style={{cursor:'pointer',fontSize:11,lineHeight:1.5,padding:'7px 10px',borderRadius:7,
+                    style={{cursor:'pointer',padding:'7px 10px',borderRadius:7,
                       border:`1px solid ${i===selectedVariant?pc+'70':'rgba(255,255,255,.08)'}`,
-                      background:i===selectedVariant?pc+'14':'rgba(255,255,255,.03)',
-                      color:i===selectedVariant?'#f0f2f8':'#7a8499',
+                      background:i===selectedVariant?pc+'14':'rgba(255,255,255,.03)'}}>
+                    {v.label && (
+                      <span style={{display:'inline-block',fontSize:8.5,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase',
+                        padding:'1.5px 6px',borderRadius:4,marginBottom:4,
+                        background:(i===selectedVariant?pc:'#7a8499')+'1f',
+                        color:i===selectedVariant?pc:'#7a8499',
+                        border:`1px solid ${(i===selectedVariant?pc:'#7a8499')}40`}}>{v.label}</span>
+                    )}
+                    <div style={{fontSize:11,lineHeight:1.5,color:i===selectedVariant?'#f0f2f8':'#7a8499',
                       display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>
-                    {v.copy}
+                      {v.copy}
+                    </div>
                   </div>
                 ))}
               </div>
