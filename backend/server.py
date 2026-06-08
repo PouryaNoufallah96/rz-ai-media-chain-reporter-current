@@ -213,6 +213,13 @@ def clean_emojis(text, platform):
         out.append(ch)
     return ''.join(out)
 
+def smart_truncate(text, limit=280):
+    """Cut to the last full word/token (never mid-word, mid-hashtag, or mid-$TICKER)."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1].rsplit(' ', 1)[0]
+    return cut.rstrip(' .,;:–—-') + '…'
+
 # ── Brand visual tones for image generation ─────────────────────────────────
 BRAND_VISUAL_TONE = {
     'RZ Prime':        'sleek dark-mode financial newsroom, deep blue and gold palette, cinematic editorial',
@@ -323,7 +330,7 @@ def handle_generate_copy(body):
         copy    = clean_emojis(result.get('copy', copy), platform)
         hashtags = result.get('hashtags', hashtags)
         if len(copy) > 280:
-            copy = copy[:277] + '…'
+            copy = smart_truncate(copy, 280)
         return copy, hashtags
 
     variants = []
@@ -346,7 +353,7 @@ def handle_generate_copy(body):
                     # only the primary variant gets a costly retry round-trip
                     copy, hashtags = _fit_to_x(copy, hashtags)
                 else:
-                    copy = copy[:277] + '…'
+                    copy = smart_truncate(copy, 280)
 
             variants.append({'copy': copy, 'hashtags': hashtags})
 
