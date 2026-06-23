@@ -20,6 +20,7 @@ export default function EditorialCard({ card, onDragStart }) {
   const updatePlatformCard = useMmStore(s => s.updatePlatformCard)
   const getCachedCopy = useMmStore(s => s.getCachedCopy)
   const setCachedCopy = useMmStore(s => s.setCachedCopy)
+  const promoMode = useMmStore(s => s.promoMode)
 
   const [popoverOpen, setPopoverOpen] = useState(false)
   const popoverRef = useRef(null)
@@ -43,7 +44,7 @@ export default function EditorialCard({ card, onDragStart }) {
 
   function sendTo(plat) {
     if (routedPlatforms.includes(plat)) return
-    routeCardToPlatform(card.id, plat, card.media, { modelLanes, platformLanes, setPlatformLanes, updatePlatformCard, getCachedCopy, setCachedCopy })
+    routeCardToPlatform(card.id, plat, card.media, { modelLanes, platformLanes, setPlatformLanes, updatePlatformCard, getCachedCopy, setCachedCopy, setActiveCard, promoMode })
   }
 
   return (
@@ -98,11 +99,13 @@ export default function EditorialCard({ card, onDragStart }) {
       <h4 style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:'#f0f2f8',lineHeight:1.35,letterSpacing:'-.01em',marginBottom:6,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{card.headline}</h4>
 
       {/* Copy preview */}
-      <p style={{fontSize:10,color:'#7a8499',lineHeight:1.5,marginBottom:8,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{card.copy}</p>
+      <p style={{fontSize:10,color:'#7a8499',lineHeight:1.5,marginBottom:8,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',opacity:card.isGenerating?0.45:1,transition:'opacity .2s'}}>{card.copy}</p>
 
       {/* Status + scores */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        {STATUS_BADGE[card.status] || STATUS_BADGE.ready}
+        {card.isGenerating
+          ? <span className="sbadge" style={{fontSize:8.5,color:'#9b72f5',background:'rgba(155,114,245,.12)',border:'1px solid rgba(155,114,245,.3)'}}>✨ Generating…</span>
+          : (STATUS_BADGE[card.status] || STATUS_BADGE.ready)}
         <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
           <span style={{fontSize:9,color:sentColor,fontWeight:600}}>{card.sentiment}</span>
           <span style={{fontSize:9,color:'#f0a040',fontWeight:700}}>⚡{card.suitability}/10</span>

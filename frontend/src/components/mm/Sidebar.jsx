@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useMmStore, MM_SOURCES, MEDIA_COLORS, PLAT_COLORS, EDITORIAL_MODEL_META } from '../../store/mmStore'
+import { useState, useEffect } from 'react'
+import { useMmStore, API_BASE, MM_SOURCES, MEDIA_COLORS, PLAT_COLORS, EDITORIAL_MODEL_META } from '../../store/mmStore'
 
 const CHECK_SVG = <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#07090e" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
 const CHECK_SVG_W = <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -25,11 +25,25 @@ function ToggleRow({ on, color, label, sub, abbr, onClick, checkWhite, filterEng
 
 export default function Sidebar({ topics, setTopics, onAnalyze }) {
   const { selectedMedia, selectedPlatforms, selectedSources, recencyHours, filterMode,
-          selectedModels, analyzing, progress, errorMsg,
-          toggleMedia, togglePlatform, toggleSource, toggleModel, setRecencyHours, setFilterMode } = useMmStore()
+          selectedModels, analyzing, progress, errorMsg, promoMode, promoPrompts,
+          toggleMedia, togglePlatform, toggleSource, toggleModel, setRecencyHours, setFilterMode,
+          togglePromoMode, setPromoPrompt } = useMmStore()
 
   const [topicInput, setTopicInput] = useState('')
-  const [topicChips, setTopicChips] = useState(['Bitcoin ETF','Regulation'])
+  const [topicChips, setTopicChips] = useState([])
+
+  useEffect(() => {
+    if (!selectedMedia.length) return
+    fetch(`${API_BASE}/api/account/brand-keywords?brands=${selectedMedia.map(encodeURIComponent).join(',')}`, { credentials:'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.keywords?.length) {
+          setTopicChips(data.keywords)
+          setTopics(data.keywords.join(', '))
+        }
+      })
+      .catch(() => {})
+  }, [selectedMedia.join(',')])
 
   function addChip(word) {
     const w = word.trim()
@@ -63,7 +77,6 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
     { key:'gemini',   color:'#4285f4', abbr:'GE', label:'Gemini 3.1 Pro Preview',badge:'Google',    sub:'Strong reasoning · multimodal' },
     { key:'claude',   color:'#d97706', abbr:'AN', label:'Claude Opus 4.7',       badge:'Anthropic', sub:'Top reasoning benchmark score' },
     { key:'deepseek', color:'#22d3ee', abbr:'DS', label:'DeepSeek V4 Flash',     badge:'DeepSeek',  sub:'Fast · cost-efficient · strong reasoning' },
-    { key:'grok',     color:'#ef4455', abbr:'GR', label:'Grok 4.3',              badge:'xAI',       sub:'xAI · real-time knowledge' },
   ]
 
   return (
@@ -88,7 +101,31 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
               {m:'ChainReporter', color:'#9b72f5',abbr:'CR', sub:'General Crypto News · Full Spectrum'},
               {m:'Meta Coin Guard',color:'#4ade80',abbr:'MCG',sub:'Security · DeFi Protection · Risk'},
             ].map(({m,color,abbr,sub}) => (
-              <ToggleRow key={m} on={selectedMedia.includes(m)} color={color} label={m} sub={sub} abbr={abbr} onClick={()=>toggleMedia(m)} />
+              <div key={m}>
+                <ToggleRow on={selectedMedia.includes(m)} color={color} label={m} sub={sub} abbr={abbr} onClick={()=>toggleMedia(m)} />
+                {selectedMedia.includes(m) && m !== 'ChainReporter' && (
+                  <div
+                    onClick={e => { e.stopPropagation(); togglePromoMode(m) }}
+                    style={{marginLeft:12,marginTop:4,display:'flex',alignItems:'center',gap:7,cursor:'pointer',userSelect:'none'}}
+                  >
+                    <span style={{fontSize:9,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:promoMode[m]?'#f0a040':'#4a5568',transition:'color .2s'}}>Promo Copy</span>
+                    <div style={{width:28,height:15,borderRadius:8,flexShrink:0,background:promoMode[m]?'rgba(240,160,64,.3)':'rgba(255,255,255,.07)',border:`1px solid ${promoMode[m]?'rgba(240,160,64,.55)':'rgba(255,255,255,.11)'}`,position:'relative',transition:'background .2s, border-color .2s'}}>
+                      <div style={{position:'absolute',top:2,left:promoMode[m]?13:2,width:9,height:9,borderRadius:'50%',background:promoMode[m]?'#f0a040':'#4a5568',transition:'left .18s ease, background .2s'}}/>
+                    </div>
+                  </div>
+                )}
+                {selectedMedia.includes(m) && promoMode[m] && (
+                  <textarea
+                    value={promoPrompts[m] || ''}
+                    onChange={e => setPromoPrompt(m, e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    placeholder={`What post do you want for ${m}?`}
+                    rows={2}
+                    className="cr-input"
+                    style={{width:'calc(100% - 12px)',marginLeft:12,marginTop:4,padding:'6px 8px',fontSize:10,resize:'vertical',minHeight:32,borderColor:'rgba(240,160,64,.25)',color:'#f0f2f8'}}
+                  />
+                )}
+              </div>
             ))}
           </div>
         </div>

@@ -39,16 +39,24 @@ export const PLAT_LIST       = ['X','Telegram','Instagram']
 export const MEDIA_COLORS    = {'RZ Prime':'#f0a040','Coin Hall':'#00d4ff','ChainReporter':'#9b72f5','Meta Coin Guard':'#4ade80'}
 export const PLAT_COLORS     = {X:'#00d4ff',Telegram:'#00d4a0',Instagram:'#e1306c'}
 
+export const IMAGE_MODEL_OPTIONS = [
+  { value:'openai/gpt-5.4-image-2', label:'GPT-5.4 Image 2 (OpenAI)' },
+  { value:'google/gemini-3.1-flash-image-preview', label:'Gemini 3.1 Flash Image (Google)' },
+  { value:'google/gemini-3-pro-image-preview', label:'Gemini 3 Pro Image (Google)' },
+  { value:'x-ai/grok-imagine-image-quality', label:'Grok Imagine Quality (xAI)' },
+  { value:'recraft/recraft-v4-pro', label:'Recraft V4 Pro' },
+]
+
 export const EDITORIAL_MODEL_META = {
   gpt:      { display:'GPT-5.5',              color:'#10a37f', badge:'OpenAI',    desc:'Best general-purpose editorial AI' },
   gemini:   { display:'Gemini 3.1 Pro Preview',color:'#4285f4', badge:'Google',    desc:'Strong reasoning · multimodal' },
   claude:   { display:'Claude Opus 4.7',       color:'#d97706', badge:'Anthropic', desc:'Top reasoning benchmark score' },
   deepseek: { display:'DeepSeek V4 Flash',     color:'#22d3ee', badge:'DeepSeek',  desc:'Fast · cost-efficient · strong reasoning' },
-  grok:     { display:'Grok 4.3',              color:'#ef4455', badge:'xAI',       desc:'xAI · real-time knowledge' },
 }
 
 export const mkey = m => m.toLowerCase().replace(/\s+/g,'-')
-export const cacheKey = (articleId, platform, modelKey) => `${articleId}|${platform}|${modelKey}`
+export const cacheKey = (articleId, platform, modelKey, mode) =>
+  `${articleId}|${platform}|${modelKey}${mode ? `|${mode}` : ''}`
 
 function buildEmptyRouted() {
   const r = {}
@@ -71,14 +79,17 @@ export const useMmStore = create((set, get) => ({
   activeCard:        null,
   editorial:         null,
   lastShortlist:     [],
-  selectedModels:    ['gpt','gemini','claude','deepseek','grok'],
-  modelLanes:        { gpt:{}, gemini:{}, claude:{}, deepseek:{}, grok:{} },
+  selectedModels:    ['gpt','gemini','claude','deepseek'],
+  modelLanes:        { gpt:{}, gemini:{}, claude:{}, deepseek:{} },
   platformLanes:     {},
   copyCache:         {},
+  promoMode:         {},
+  promoPrompts:      {},
   progress:          { pct: 0, label: '' },
   analyzing:         false,
   errorMsg:          '',
   mmReport:          null,
+  reportOpen:        false,
 
   // ── Setters ──
   setSelectedMedia:     v  => set({ selectedMedia: v }),
@@ -96,6 +107,7 @@ export const useMmStore = create((set, get) => ({
   setAnalyzing:         v  => set({ analyzing: v }),
   setErrorMsg:          v  => set({ errorMsg: v }),
   setMmReport:          v  => set({ mmReport: v }),
+  setReportOpen:        v  => set({ reportOpen: v }),
 
   toggleMedia: (m) => set(s => {
     const arr = s.selectedMedia.includes(m)
@@ -193,8 +205,11 @@ export const useMmStore = create((set, get) => ({
     return { activeCard, platformLanes }
   }),
 
-  getCachedCopy: (articleId, platform, modelKey) => get().copyCache[cacheKey(articleId, platform, modelKey)] || null,
-  setCachedCopy: (articleId, platform, modelKey, payload) => set(s => ({
-    copyCache: { ...s.copyCache, [cacheKey(articleId, platform, modelKey)]: payload }
+  togglePromoMode: (brand) => set(s => ({ promoMode: { ...s.promoMode, [brand]: !s.promoMode[brand] } })),
+  setPromoPrompt: (brand, text) => set(s => ({ promoPrompts: { ...s.promoPrompts, [brand]: text } })),
+
+  getCachedCopy: (articleId, platform, modelKey, mode) => get().copyCache[cacheKey(articleId, platform, modelKey, mode)] || null,
+  setCachedCopy: (articleId, platform, modelKey, payload, mode) => set(s => ({
+    copyCache: { ...s.copyCache, [cacheKey(articleId, platform, modelKey, mode)]: payload }
   })),
 }))

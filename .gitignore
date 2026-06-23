@@ -9,3 +9,10 @@ temporary screenshots/
 CLAUDE*.md
 *.mp4
 check_front.png
+
+# Runtime logs / pid
+backend/*.log
+backend/*.pid
+
+# Local tooling
+.claude/

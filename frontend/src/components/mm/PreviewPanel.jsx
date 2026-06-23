@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { useMmStore, API_BASE, MEDIA_COLORS, PLAT_COLORS } from '../../store/mmStore'
+import { useMmStore, API_BASE, MEDIA_COLORS, PLAT_COLORS, IMAGE_MODEL_OPTIONS } from '../../store/mmStore'
+import { useAccountStore } from '../../store/accountStore'
+import { PLAT_ICONS } from '../../utils/platformIcons'
+import SchedulePicker from './SchedulePicker'
 
-const PLAT_ICONS = {
-  X:        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.81l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>,
-  Telegram: <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.7 8c-.12.56-.45.7-.9.44l-2.5-1.84-1.2 1.16c-.13.13-.24.24-.5.24l.18-2.52 4.56-4.12c.2-.18-.04-.27-.3-.1L7.56 15.4l-2.46-.77c-.53-.17-.54-.53.12-.78l9.62-3.72c.44-.16.83.1.8.67z"/></svg>,
-  Instagram:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".7" fill="currentColor" stroke="none"/></svg>,
-}
-const STATUS_CLASSES = {ready:'sb-ready',image:'sb-image',approved:'sb-approved',scheduled:'sb-scheduled',published:'sb-published'}
-const STATUS_LABELS  = {ready:'Ready',image:'Needs Image',approved:'Approved',scheduled:'Scheduled',published:'Published'}
+const STATUS_CLASSES = {ready:'sb-ready',image:'sb-image',approved:'sb-approved',scheduled:'sb-scheduled',published:'sb-published',saved:'sb-saved'}
+const STATUS_LABELS  = {ready:'Ready',image:'Needs Image',approved:'Approved',scheduled:'Scheduled',published:'Published',saved:'Saved'}
+const SCHEDULABLE_PLATFORMS = ['X', 'Telegram']
 
 async function callAppsScript(payload) {
   const { action, ...rest } = payload
@@ -37,24 +36,73 @@ async function sendToX(card, imageB64) {
   return res.json()
 }
 
-export default function PreviewPanel() {
+async function createScheduledPost(card, mode, copyText, hashtagsState, generatedImg, scheduledAtIso) {
+  const res = await fetch(`${API_BASE}/api/schedule/create`, {
+    method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      cardId: mode === 'saved' ? card.card_id : card.id,
+      savedCardId: mode === 'saved' ? card.id : null,
+      brand: card.media, platform: card.platform, modelDisplay: card._modelDisplay||'',
+      headline: card.headline, copy: copyText,
+      hashtags: hashtagsState.length ? hashtagsState : (card.hashtags||[]),
+      sentiment: card.sentiment, suitability: card.suitability, impact: card.impact, virality: card.virality,
+      source: card.source, sourceUrl: card.link||'',
+      imageB64: generatedImg || card._generatedImageB64 || '',
+      imageUrl: card.imageUrl||'',
+      scheduledAt: scheduledAtIso,
+    })
+  })
+  if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e?.error || `Schedule failed (${res.status})`) }
+}
+
+export default function PreviewPanel({ mode = 'multimedia', card: cardProp, onClose }) {
   const { activeCard, setActiveCard, updateCardStatus, updatePlatformCard } = useMmStore()
-  const card = activeCard
+  const { confirmScheduleSaved, discardSaved } = useAccountStore()
+  const card = mode === 'saved' ? cardProp : activeCard
   const isOpen = !!card
+
+  function _approveLabel(plat) {
+    const p = (plat || '').trim().toLowerCase()
+    if (p === 'telegram') return 'Post to Telegram'
+    if (p === 'x' || p === 'twitter') return 'Post to X'
+    return 'Approve Image'
+  }
 
   const [editing, setEditing]         = useState(false)
   const [copyText, setCopyText]       = useState('')
   const [showImage, setShowImage]     = useState(false)
   const [showSchedule, setShowSchedule] = useState(false)
   const [imageModel, setImageModel]   = useState('openai/gpt-5.4-image-2')
+  const [imagePrompt, setImagePrompt] = useState('')
+  const [refImages, setRefImages]     = useState([])
   const [generatedImg, setGeneratedImg] = useState('')
   const [imgLoading, setImgLoading]   = useState(false)
+  const [aiBrief, setAiBrief]         = useState(null)
+  const [showAiBrief, setShowAiBrief] = useState(false)
   const [approveLabel, setApproveLabel] = useState('✓ Approve')
-  const [approveImgLabel, setApproveImgLabel] = useState('✓ Approve Image')
+  const [approveImgLabel, setApproveImgLabel] = useState(() => _approveLabel(cardProp?.platform))
+  const [saveLabel, setSaveLabel] = useState('Save for Later')
   const [schedDate, setSchedDate] = useState('')
   const [schedTime, setSchedTime] = useState('09:00')
   const [selectedVariant, setSelectedVariant] = useState(0)
+  const [genPct, setGenPct] = useState(0)
+  const [hashtagsState, setHashtagsState] = useState([])
+  const [discardLabel, setDiscardLabel] = useState('Discard')
+  const [confirmLabel, setConfirmLabel] = useState('✓ Confirm')
+  const [savedStatus, setSavedStatus] = useState(null)
+  const [scheduleSavedLabel, setScheduleSavedLabel] = useState('Confirm Schedule')
   const copyRef = useRef(null)
+
+  const ESTIMATE_MS = 18000
+  useEffect(() => {
+    if (!card?.isGenerating) return
+    setGenPct(0)
+    const started = card.genStartedAt || Date.now()
+    const tick = () => setGenPct(Math.min(92, Math.round(100 * (1 - Math.exp(-(Date.now() - started) / ESTIMATE_MS)))))
+    tick()
+    const id = setInterval(tick, 250)
+    return () => { clearInterval(id); setGenPct(100) }
+  }, [card?.id, card?.platform, card?.isGenerating, card?.genStartedAt])
 
   useEffect(() => {
     if (card) {
@@ -64,8 +112,14 @@ export default function PreviewPanel() {
       setShowSchedule(false)
       setGeneratedImg('')
       setApproveLabel('✓ Approve')
-      setApproveImgLabel('✓ Approve Image')
+      setApproveImgLabel(_approveLabel(card?.platform))
+      setSaveLabel('Save for Later')
       setSelectedVariant(0)
+      setHashtagsState(card.hashtags || [])
+      setDiscardLabel('Discard')
+      setScheduleSavedLabel('Confirm Schedule')
+      setConfirmLabel('✓ Confirm')
+      setSavedStatus(null)
     }
   }, [card?.id])
 
@@ -74,31 +128,42 @@ export default function PreviewPanel() {
   const mc = MEDIA_COLORS[card.media] || '#7a8499'
   const pc = PLAT_COLORS[card.platform] || '#7a8499'
   const sentColor = card.sentiment==='Bullish'?'#00d4a0':card.sentiment==='Bearish'?'#ef4455':'#7a8499'
+  const displayStatus = mode === 'saved' ? (savedStatus || card.status) : card.status
+
+  function markApproved() {
+    if (mode === 'multimedia') updateCardStatus(card.id, 'approved')
+    else setSavedStatus('approved')
+  }
 
   async function handleApprove() {
     setApproveLabel('Saving…')
     try {
       await callAppsScript({ action:'approve', id:card.id, title:card.headline, source:card.source, sourceUrl:card.link||'', mediaBrand:card.media, platform:card.platform, copy:copyText, hashtags:card.hashtags||[], sentiment:card.sentiment, fitScore:card.suitability, impactScore:card.impact, viralityScore:card.virality, imageStatus:card.imageUrl?'Image Approved':'No Image', imageUrl:card.imageUrl||'' })
-      updateCardStatus(card.id, 'approved')
+      markApproved()
+      fetch(`${API_BASE}/api/account/log-action`, {
+        method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ brand: card.media, platform: card.platform, modelDisplay: card._modelDisplay||'', headline: card.headline, action: 'approved' })
+      }).catch(()=>{})
       if (card.platform==='X') setApproveLabel('✓ Saved — Approve Image below to post to X')
       else if (card.platform==='Telegram') setApproveLabel('✓ Saved — Approve Image to post to Telegram')
       else if (card.platform==='Instagram') setApproveLabel('✓ Saved to Sheets — post manually on Instagram')
       else setApproveLabel('✓ Approved')
-    } catch(e) { updateCardStatus(card.id,'approved'); setApproveLabel('✓ Approve') }
+    } catch(e) { markApproved(); setApproveLabel('✓ Approve') }
   }
 
   async function handleGenerateImage() {
-    setImgLoading(true); setGeneratedImg('')
+    setImgLoading(true); setGeneratedImg(''); setAiBrief(null)
     try {
       const res = await fetch(`${API_BASE}/api/image/generate`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ article:{title:card.headline}, platform:card.platform||'X', mediaBrand:card.media||'ChainReporter', sentiment:card.sentiment||'Neutral', model:imageModel })
+        body:JSON.stringify({ article:{title:card.headline}, platform:card.platform||'X', mediaBrand:card.media||'ChainReporter', sentiment:card.sentiment||'Neutral', model:imageModel, copy:copyText, ...(imagePrompt.trim() && {imageDirection:imagePrompt.trim()}), ...(refImages.length && {referenceImages:refImages.map(r=>r.b64)}) })
       })
       if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e?.error||res.statusText) }
       const data = await res.json()
       if (!data.imageB64) throw new Error('No image data returned')
       setGeneratedImg(data.imageB64)
-      useMmStore.getState().activeCard._generatedImageB64 = data.imageB64
+      if (mode === 'multimedia') useMmStore.getState().activeCard._generatedImageB64 = data.imageB64
+      if (data.brief) setAiBrief({ brief: data.brief, prompt: data.prompt })
     } catch(e) { alert('Image generation failed: '+e.message) }
     finally { setImgLoading(false) }
   }
@@ -110,33 +175,102 @@ export default function PreviewPanel() {
     try {
       const up = await callAppsScript({ action:'uploadImage', imageB64:b64, mediaBrand:card.media, platform:card.platform||'X' })
       const driveUrl = up?.driveUrl || ''
-      useMmStore.getState().activeCard.imageUrl = driveUrl
+      if (mode === 'multimedia') useMmStore.getState().activeCard.imageUrl = driveUrl
       try {
         await callAppsScript({ action:'approve', id:card.id, title:card.headline, source:card.source, sourceUrl:card.link||'', mediaBrand:card.media, platform:card.platform, copy:copyText, hashtags:card.hashtags||[], sentiment:card.sentiment, fitScore:card.suitability, impactScore:card.impact, viralityScore:card.virality, imageStatus:'Image Approved', imageUrl:driveUrl })
       } catch(_) {}
-      if (card.platform==='X') {
+      const plat = (card.platform || '').trim().toLowerCase()
+      if (plat === 'x' || plat === 'twitter') {
         setApproveImgLabel('Posting to X…')
-        try { await sendToX(card, b64); updateCardStatus(card.id,'approved'); setApproveImgLabel('✓ Posted to X') }
-        catch(e) { updateCardStatus(card.id,'approved'); setApproveImgLabel('✗ X failed: '+e.message.slice(0,40)) }
-      } else if (card.platform==='Telegram') {
+        try { await sendToX(card, b64); markApproved(); setApproveImgLabel('✓ Posted to X') }
+        catch(e) { markApproved(); setApproveImgLabel('✗ X failed: '+e.message.slice(0,40)) }
+      } else if (plat === 'telegram') {
         setApproveImgLabel('Posting to Telegram…')
-        try { await sendToTelegram(card, b64); updateCardStatus(card.id,'approved'); setApproveImgLabel('✓ Posted to Telegram') }
-        catch(e) { updateCardStatus(card.id,'approved'); setApproveImgLabel('✗ Telegram: '+e.message.slice(0,40)) }
-      } else if (card.platform==='Instagram') {
-        updateCardStatus(card.id,'approved'); setApproveImgLabel('✓ Image saved — post manually on Instagram')
+        try { await sendToTelegram(card, b64); markApproved(); setApproveImgLabel('✓ Posted to Telegram') }
+        catch(e) { markApproved(); setApproveImgLabel('✗ Telegram: '+e.message.slice(0,40)) }
+      } else if (plat === 'instagram') {
+        markApproved(); setApproveImgLabel('✓ Image saved — post manually on Instagram')
       } else {
-        updateCardStatus(card.id,'approved'); setApproveImgLabel('✓ Image Approved')
+        markApproved(); setApproveImgLabel('✓ Image saved to Drive — route card to a platform to post')
       }
     } catch(e) { setApproveImgLabel('Error: '+e.message.slice(0,50)) }
   }
 
   async function handleSchedule() {
     if (!schedDate||!schedTime) { alert('Select date and time'); return }
+    const scheduledAtIso = new Date(`${schedDate}T${schedTime}`).toISOString()
+    if (new Date(scheduledAtIso) <= new Date()) { alert('Please pick a time in the future'); return }
     try {
       await callAppsScript({ action:'schedule', id:card.id, title:card.headline, source:card.source, sourceUrl:card.link||'', mediaBrand:card.media, platform:card.platform, copy:copyText, hashtags:card.hashtags||[], sentiment:card.sentiment, fitScore:card.suitability, impactScore:card.impact, viralityScore:card.virality, scheduledDate:schedDate, scheduledTime:schedTime })
+      if (SCHEDULABLE_PLATFORMS.includes(card.platform)) {
+        await createScheduledPost(card, mode, copyText, hashtagsState, generatedImg, scheduledAtIso)
+        useAccountStore.getState().fetchScheduled()
+      }
       updateCardStatus(card.id,'scheduled')
+      fetch(`${API_BASE}/api/account/log-action`, {
+        method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ brand: card.media, platform: card.platform, modelDisplay: card._modelDisplay||'', headline: card.headline, action: 'scheduled' })
+      }).catch(()=>{})
       setShowSchedule(false)
     } catch(e) { alert('Schedule error: '+e.message) }
+  }
+
+  async function handleSaveForLater() {
+    setSaveLabel('Saving…')
+    try {
+      const res = await fetch(`${API_BASE}/api/account/save`, {
+        method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          id: card.id, media: card.media, platform: card.platform,
+          modelDisplay: card._modelDisplay, modelColor: card._modelColor,
+          headline: card.headline, copy: copyText, hashtags: hashtagsState,
+          sentiment: card.sentiment, suitability: card.suitability, impact: card.impact, virality: card.virality,
+          source: card.source, link: card.link||'', initials: card.initials, srcColor: card.srcColor,
+          variants: card.variants||[],
+        })
+      })
+      if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e?.error || `Save failed (${res.status})`) }
+      setSaveLabel('✓ Saved for Later')
+    } catch(e) { setSaveLabel('Save for Later'); alert('Save failed: '+e.message) }
+  }
+
+  async function handleConfirmScheduleSaved() {
+    if (!schedDate||!schedTime) { alert('Select date and time'); return }
+    const scheduledAtIso = new Date(`${schedDate}T${schedTime}`).toISOString()
+    if (new Date(scheduledAtIso) <= new Date()) { alert('Please pick a time in the future'); return }
+    setScheduleSavedLabel('Scheduling…')
+    try {
+      if (SCHEDULABLE_PLATFORMS.includes(card.platform)) {
+        await createScheduledPost(card, mode, copyText, hashtagsState, generatedImg, scheduledAtIso)
+        useAccountStore.getState().fetchScheduled()
+      }
+      const ok = await confirmScheduleSaved(card.id, schedDate, schedTime, copyText, hashtagsState)
+      if (ok) onClose?.()
+      else setScheduleSavedLabel('Confirm Schedule')
+    } catch(e) { setScheduleSavedLabel('Confirm Schedule'); alert('Schedule error: '+e.message) }
+  }
+
+  async function handleDiscard() {
+    setDiscardLabel('Discarding…')
+    const ok = await discardSaved(card.id)
+    if (ok) onClose?.()
+    else setDiscardLabel('Discard')
+  }
+
+  async function handleConfirmSaved() {
+    setConfirmLabel('Saving…')
+    try {
+      await callAppsScript({ action:'approve', id:card.id, title:card.headline, source:card.source, sourceUrl:card.link||'', mediaBrand:card.media, platform:card.platform, copy:copyText, hashtags:card.hashtags||[], sentiment:card.sentiment, fitScore:card.suitability, impactScore:card.impact, viralityScore:card.virality, imageStatus:card.imageUrl?'Image Approved':'No Image', imageUrl:card.imageUrl||'' })
+      markApproved()
+      fetch(`${API_BASE}/api/account/log-action`, {
+        method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ brand: card.media, platform: card.platform, modelDisplay: card._modelDisplay||'', headline: card.headline, action: 'approved' })
+      }).catch(()=>{})
+      if (card.platform==='X') setConfirmLabel('✓ Saved — Approve Image below to post to X')
+      else if (card.platform==='Telegram') setConfirmLabel('✓ Saved — Approve Image to post to Telegram')
+      else if (card.platform==='Instagram') setConfirmLabel('✓ Saved to Sheets — post manually on Instagram')
+      else setConfirmLabel('✓ Approved')
+    } catch(e) { markApproved(); setConfirmLabel('✓ Confirm') }
   }
 
   function openSchedule() {
@@ -151,13 +285,21 @@ export default function PreviewPanel() {
     })
   }
 
+  function handleClose() {
+    if (mode === 'saved') onClose?.()
+    else setActiveCard(null)
+  }
+
+  const panelId = mode === 'saved' ? 'saved-detail-panel' : 'preview-panel'
+  const overlayId = mode === 'saved' ? 'saved-detail-overlay' : 'preview-overlay'
+
   return (
     <>
       {/* Overlay */}
-      <div id="preview-overlay" className={isOpen?'open':''} onClick={()=>setActiveCard(null)}></div>
+      <div id={overlayId} className={isOpen?'open':''}></div>
 
       {/* Panel */}
-      <div id="preview-panel" className={isOpen?'open':''}>
+      <div id={panelId} className={isOpen?'open':''}>
         {/* Header */}
         <div style={{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
           <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
@@ -166,7 +308,7 @@ export default function PreviewPanel() {
             <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:'#f0f2f8'}}>{card.platform}</span>
             <span className={`sbadge`} style={{fontSize:9,background:sentColor+'15',color:sentColor,border:`1px solid ${sentColor}35`}}>{card.sentiment}</span>
           </div>
-          <button onClick={()=>setActiveCard(null)} style={{background:'none',border:'none',cursor:'pointer',color:'#7a8499',padding:4,borderRadius:6,transition:'color .18s,background .18s'}}
+          <button onClick={handleClose} style={{background:'none',border:'none',cursor:'pointer',color:'#7a8499',padding:4,borderRadius:6,transition:'color .18s,background .18s'}}
             onMouseEnter={e=>{e.currentTarget.style.color='#f0f2f8';e.currentTarget.style.background='rgba(255,255,255,.07)'}}
             onMouseLeave={e=>{e.currentTarget.style.color='#7a8499';e.currentTarget.style.background='none'}}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -174,7 +316,7 @@ export default function PreviewPanel() {
         </div>
 
         {/* Body */}
-        <div style={{flex:1,overflowY:'auto',padding:16,display:'flex',flexDirection:'column',gap:14}}>
+        <div style={{padding:16,display:'flex',flexDirection:'column',gap:14}}>
           {/* Source */}
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <div style={{width:20,height:20,borderRadius:5,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:7,fontWeight:700,background:card.srcColor+'1a',color:card.srcColor,border:`1px solid ${card.srcColor}30`}}>{card.initials}</div>
@@ -193,16 +335,18 @@ export default function PreviewPanel() {
           </div>
 
           {/* Why boxes */}
-          <div style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:10,padding:'10px 12px',display:'flex',flexDirection:'column',gap:9}}>
-            <div>
-              <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase'}}>Why this media brand?</p>
-              <p style={{fontSize:12,color:'#c8cdd8',lineHeight:1.55}}>{card.mediaReason||'—'}</p>
+          {mode === 'multimedia' && (
+            <div style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:10,padding:'10px 12px',display:'flex',flexDirection:'column',gap:9}}>
+              <div>
+                <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase'}}>Why this media brand?</p>
+                <p style={{fontSize:12,color:'#c8cdd8',lineHeight:1.55}}>{card.mediaReason||'—'}</p>
+              </div>
+              <div style={{borderTop:'1px solid rgba(255,255,255,.06)',paddingTop:9}}>
+                <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase'}}>Why this platform?</p>
+                <p style={{fontSize:12,color:'#c8cdd8',lineHeight:1.55}}>{card.platReason||'—'}</p>
+              </div>
             </div>
-            <div style={{borderTop:'1px solid rgba(255,255,255,.06)',paddingTop:9}}>
-              <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase'}}>Why this platform?</p>
-              <p style={{fontSize:12,color:'#c8cdd8',lineHeight:1.55}}>{card.platReason||'—'}</p>
-            </div>
-          </div>
+          )}
 
           {/* Copy */}
           <div>
@@ -213,7 +357,20 @@ export default function PreviewPanel() {
                 {editing ? 'Done' : 'Edit'}
               </button>
             </div>
-            {editing
+            {card.isGenerating
+              ? (
+                <div style={{background:'rgba(155,114,245,.06)',border:'1px solid rgba(155,114,245,.22)',borderRadius:8,padding:'14px 14px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                    <span className="spinner" style={{width:13,height:13,border:'1.5px solid rgba(155,114,245,.25)',borderTopColor:'#9b72f5'}}/>
+                    <span style={{fontSize:12,color:'#c8cdd8'}}>Generating 3 platform-specific variants — please wait…</span>
+                  </div>
+                  <div style={{height:6,borderRadius:4,background:'rgba(255,255,255,.06)',overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${genPct}%`,borderRadius:4,background:'linear-gradient(90deg,#9b72f5,#00d4a0)',transition:'width .25s ease-out'}}/>
+                  </div>
+                  <div style={{marginTop:6,fontSize:10.5,color:'#7a8499',textAlign:'right'}}>{genPct}%</div>
+                </div>
+              )
+              : editing
               ? <textarea value={copyText} onChange={e=>setCopyText(e.target.value)} style={{width:'100%',minHeight:80,background:'rgba(0,212,160,.05)',border:'1px solid rgba(0,212,160,.45)',borderRadius:8,padding:'8px 10px',fontSize:13,color:'#f0f2f8',lineHeight:1.65,fontFamily:'Inter,sans-serif',resize:'vertical',boxShadow:'0 0 0 3px rgba(0,212,160,.08)',outline:'none'}}/>
               : <div id="preview-copy" style={{fontSize:13,color:'#c8cdd8',lineHeight:1.65}}>{copyText}</div>
             }
@@ -226,8 +383,8 @@ export default function PreviewPanel() {
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {card.variants.map((v,i)=>(
                   <div key={i} onClick={()=>{
-                      setSelectedVariant(i); setCopyText(v.copy)
-                      updatePlatformCard(card.id, card.platform, { copy:v.copy, hashtags:v.hashtags, charCount:v.copy.length })
+                      setSelectedVariant(i); setCopyText(v.copy); setHashtagsState(v.hashtags||[])
+                      if (mode === 'multimedia') updatePlatformCard(card.id, card.platform, { copy:v.copy, hashtags:v.hashtags, charCount:v.copy.length })
                     }}
                     style={{cursor:'pointer',padding:'7px 10px',borderRadius:7,
                       border:`1px solid ${i===selectedVariant?pc+'70':'rgba(255,255,255,.08)'}`,
@@ -251,7 +408,7 @@ export default function PreviewPanel() {
 
           {/* Hashtags */}
           <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
-            {(card.hashtags||[]).map(h=>(
+            {hashtagsState.map(h=>(
               <span key={h} style={{fontSize:10.5,fontWeight:600,color:pc}}>{h}</span>
             ))}
           </div>
@@ -265,28 +422,64 @@ export default function PreviewPanel() {
           {/* Status */}
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <span style={{fontSize:11,color:'#7a8499'}}>Status:</span>
-            <span className={`sbadge ${STATUS_CLASSES[card.status]||'sb-ready'}`}>{STATUS_LABELS[card.status]||'Ready'}</span>
+            <span className={`sbadge ${STATUS_CLASSES[displayStatus]||'sb-ready'}`}>{STATUS_LABELS[displayStatus]||'Ready'}</span>
           </div>
         </div>
 
         {/* Footer actions */}
         <div style={{padding:'14px 16px',borderTop:'1px solid rgba(255,255,255,.07)',display:'flex',flexDirection:'column',gap:8,flexShrink:0}}>
-          <div style={{display:'flex',gap:8}}>
-            <button className="btn-mint" style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase',fontWeight:700}} onClick={handleApprove}>{approveLabel}</button>
-            <button className="btn-ghost" style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={()=>{setShowImage(s=>!s);setShowSchedule(false)}}>Needs Image</button>
-          </div>
-          <button className="btn-ghost" style={{width:'100%',padding:8,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={openSchedule}>Schedule</button>
+          {mode === 'multimedia' ? (
+            <>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn-mint" style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase',fontWeight:700}} onClick={handleApprove}>{approveLabel}</button>
+                <button className="btn-ghost" style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={()=>{setShowImage(s=>!s);setShowSchedule(false)}}>Needs Image</button>
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn-ghost" style={{flex:1,padding:8,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={openSchedule}>Schedule</button>
+                <button className="btn-ghost" style={{flex:1,padding:8,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={handleSaveForLater} disabled={saveLabel!=='Save for Later'}>{saveLabel}</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn-mint" style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase',fontWeight:700}} onClick={handleConfirmSaved}>{confirmLabel}</button>
+                <button className="btn-ghost" style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={()=>{setShowImage(s=>!s);setShowSchedule(false)}}>Generate Image</button>
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn-ghost" style={{flex:1,padding:8,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={openSchedule}>Schedule</button>
+                <button className="btn-ghost" style={{flex:1,padding:8,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase'}} onClick={handleDiscard} disabled={discardLabel!=='Discard'}>{discardLabel}</button>
+              </div>
+            </>
+          )}
 
           {/* Image section */}
           {showImage && (
             <div style={{display:'flex',flexDirection:'column',gap:8,borderTop:'1px solid rgba(255,255,255,.06)',paddingTop:10}}>
-              <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:7,letterSpacing:'.06em',textTransform:'uppercase'}}>Image Generation Model</p>
+              <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase'}}>Image Direction <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>(optional)</span></p>
+              <textarea value={imagePrompt} onChange={e=>setImagePrompt(e.target.value)} placeholder="Describe what you want in the image… e.g. show the wolf mascot, use a comparison table layout" rows={2} className="cr-input" style={{width:'100%',padding:'7px 10px',fontSize:11,resize:'vertical',minHeight:36}} />
+              <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase',marginTop:4}}>Reference Images <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>(optional, max 3)</span></p>
+              <label style={{display:'inline-flex',alignItems:'center',gap:5,padding:'6px 12px',fontSize:10,fontWeight:600,borderRadius:8,border:'1px solid rgba(155,114,245,.35)',background:'rgba(155,114,245,.08)',color:'#9b72f5',cursor:'pointer',letterSpacing:'.04em'}}>
+                + Add Images
+                <input type="file" accept="image/*" multiple style={{display:'none'}} onChange={e=>{
+                  const files = Array.from(e.target.files).slice(0, 3 - refImages.length)
+                  if (!files.length) return
+                  Promise.all(files.map(f=>new Promise(res=>{const r=new FileReader();r.onload=()=>res({name:f.name,b64:r.result,preview:r.result});r.readAsDataURL(f)}))).then(imgs=>setRefImages(prev=>[...prev,...imgs].slice(0,3)))
+                  e.target.value = ''
+                }} />
+              </label>
+              {refImages.length > 0 && (
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {refImages.map((img,i) => (
+                    <div key={i} style={{position:'relative',width:52,height:52}}>
+                      <img src={img.preview} alt={img.name} style={{width:52,height:52,objectFit:'cover',borderRadius:6,border:'1px solid rgba(255,255,255,.1)'}} />
+                      <button onClick={()=>setRefImages(prev=>prev.filter((_,j)=>j!==i))} style={{position:'absolute',top:-4,right:-4,width:16,height:16,borderRadius:'50%',border:'none',background:'#ef4455',color:'#fff',fontSize:9,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1,padding:0}}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:7,letterSpacing:'.06em',textTransform:'uppercase',marginTop:4}}>Image Generation Model</p>
               <select value={imageModel} onChange={e=>setImageModel(e.target.value)} className="cr-input" style={{width:'100%',padding:'7px 10px',fontSize:11}}>
-                <option value="openai/gpt-5.4-image-2">GPT-5.4 Image 2 (OpenAI)</option>
-                <option value="google/gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (Google)</option>
-                <option value="google/gemini-3-pro-image-preview">Gemini 3 Pro Image (Google)</option>
-                <option value="x-ai/grok-imagine-image-quality">Grok Imagine Quality (xAI)</option>
-                <option value="recraft/recraft-v4-pro">Recraft V4 Pro</option>
+                {IMAGE_MODEL_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
               <button onClick={handleGenerateImage} disabled={imgLoading}
                 style={{width:'100%',padding:9,fontSize:11,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',border:'none',borderRadius:9,cursor:'pointer',background:'linear-gradient(135deg,#f0a040,#e08030)',color:'#07090e',opacity:imgLoading?0.6:1,transition:'opacity .18s'}}>
@@ -301,6 +494,26 @@ export default function PreviewPanel() {
                   </div>
                 </div>
               )}
+              {aiBrief && (
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  <button onClick={()=>setShowAiBrief(s=>!s)} className="btn-ghost"
+                    style={{width:'100%',padding:7,fontSize:10,letterSpacing:'.06em',textTransform:'uppercase'}}>
+                    {showAiBrief ? 'Hide AI Brief ▴' : 'Show AI Brief ▾'}
+                  </button>
+                  {showAiBrief && (
+                    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                      <div>
+                        <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:5,letterSpacing:'.06em',textTransform:'uppercase'}}>Visual Brief (JSON)</p>
+                        <pre style={{margin:0,padding:'8px 10px',fontSize:10,lineHeight:1.5,color:'#c8cdd8',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.08)',borderRadius:8,overflowX:'auto',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{JSON.stringify(aiBrief.brief, null, 2)}</pre>
+                      </div>
+                      <div>
+                        <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:5,letterSpacing:'.06em',textTransform:'uppercase'}}>Assembled Prompt</p>
+                        <pre style={{margin:0,padding:'8px 10px',fontSize:10,lineHeight:1.5,color:'#c8cdd8',background:'rgba(0,0,0,.3)',border:'1px solid rgba(255,255,255,.08)',borderRadius:8,overflowX:'auto',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{aiBrief.prompt}</pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -308,15 +521,15 @@ export default function PreviewPanel() {
           {showSchedule && (
             <div style={{display:'flex',flexDirection:'column',gap:8,borderTop:'1px solid rgba(255,255,255,.06)',paddingTop:10}}>
               <p style={{fontSize:10,fontWeight:600,color:'#7a8499',marginBottom:7,letterSpacing:'.06em',textTransform:'uppercase'}}>Schedule Post</p>
-              <div style={{display:'flex',gap:6}}>
-                <input type="date" value={schedDate} onChange={e=>setSchedDate(e.target.value)} className="cr-input" style={{flex:1,padding:'7px 8px',fontSize:11}} />
-                <input type="time" value={schedTime} onChange={e=>setSchedTime(e.target.value)} className="cr-input" style={{flex:1,padding:'7px 8px',fontSize:11}} />
-              </div>
-              <button onClick={handleSchedule}
-                style={{width:'100%',padding:9,fontSize:11,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',border:'none',borderRadius:9,cursor:'pointer',background:'linear-gradient(135deg,#f0a040,#e08030)',color:'#07090e',transition:'opacity .18s'}}
-                onMouseEnter={e=>e.currentTarget.style.opacity='.85'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
-                Confirm Schedule
-              </button>
+              {generatedImg && (
+                <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:8,background:'rgba(0,212,160,.06)',border:'1px solid rgba(0,212,160,.2)'}}>
+                  <img src={`data:image/png;base64,${generatedImg}`} alt="Generated" style={{width:44,height:44,borderRadius:6,objectFit:'cover',flexShrink:0}} />
+                  <span style={{fontSize:11,color:'#00d4a0'}}>Image will be attached to this post</span>
+                </div>
+              )}
+              <SchedulePicker date={schedDate} time={schedTime} onDateChange={setSchedDate} onTimeChange={setSchedTime}
+                onConfirm={mode === 'multimedia' ? handleSchedule : handleConfirmScheduleSaved}
+                confirmLabel={mode === 'multimedia' ? 'Confirm Schedule' : scheduleSavedLabel} />
             </div>
           )}
         </div>
