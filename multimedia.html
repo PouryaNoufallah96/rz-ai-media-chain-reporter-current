@@ -616,15 +616,6 @@
             <div id="chk-model-deepseek" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
           </div>
 
-          <div class="toggle-row" id="model-row-grok" onclick="toggleModel('grok')" style="cursor:pointer;border-color:rgba(239,68,85,.55);background:rgba(239,68,85,.08);">
-            <div style="width:22px;height:22px;border-radius:6px;background:rgba(239,68,85,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:7px;font-weight:800;color:#ef4455;">GR</div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">Grok 4.3 <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(239,68,85,.15);color:#ef4455;margin-left:3px;">xAI</span></div>
-              <div style="font-size:10px;color:#7a8499;">xAI · real-time knowledge</div>
-            </div>
-            <div id="chk-model-grok" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
-          </div>
-
         </div>
       </div>
 
@@ -756,7 +747,6 @@
           <option value="openai/gpt-5.4-image-2" selected>GPT-5.4 Image 2 (OpenAI)</option>
           <option value="google/gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (Google)</option>
           <option value="google/gemini-3-pro-image-preview">Gemini 3 Pro Image (Google)</option>
-          <option value="x-ai/grok-imagine-image-quality">Grok Imagine Quality (xAI)</option>
           <option value="recraft/recraft-v4-pro">Recraft V4 Pro</option>
         </select>
       </div>
@@ -1292,8 +1282,8 @@ const mmState = {
   lastShortlist: [],
   testMode: false,
   // Editorial mode lane state
-  selectedModels: ['gpt', 'gemini', 'claude', 'deepseek', 'grok'],
-  modelLanes:    { gpt: {}, gemini: {}, claude: {}, deepseek: {}, grok: {} },
+  selectedModels: ['gpt', 'gemini', 'claude', 'deepseek'],
+  modelLanes:    { gpt: {}, gemini: {}, claude: {}, deepseek: {} },
   platformLanes: {},     // { brand: { X: [], Telegram: [], Instagram: [] } }
 };
 
@@ -2535,7 +2525,6 @@ const EDITORIAL_MODEL_META = {
   gemini:   { display: 'Gemini 3.1 Pro Preview',   color: '#4285f4', badge: 'Google',    desc: 'Strong reasoning · multimodal' },
   claude:   { display: 'Claude Opus 4.7',  color: '#d97706', badge: 'Anthropic', desc: 'Top reasoning benchmark score' },
   deepseek: { display: 'DeepSeek V4 Flash',color: '#22d3ee', badge: 'DeepSeek',  desc: 'Fast · cost-efficient · strong reasoning' },
-  grok:     { display: 'Grok 4.3',         color: '#ef4455', badge: 'xAI',       desc: 'xAI · real-time knowledge' },
 };
 
 // ── EDITORIAL BRAND LAYOUT (one section per brand, 3 model lanes + platform lanes each) ──

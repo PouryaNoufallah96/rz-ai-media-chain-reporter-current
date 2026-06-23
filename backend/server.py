@@ -1545,7 +1545,6 @@ G. Article: "DOGE pumps 40% on viral moment" (only reachable if meme_enabled is 
 # ── OpenRouter image generation ───────────────────────────────────────────────
 # Models that use the OpenRouter chat/completions endpoint with modalities:["image"]
 OPENROUTER_IMAGE_MODELS = {
-    'x-ai/grok-imagine-image-quality':      ['image'],
     'google/gemini-3.1-flash-image-preview':['image', 'text'],
     'google/gemini-3-pro-image-preview':    ['image', 'text'],
     'openai/gpt-5.4-image-2':              ['image', 'text'],

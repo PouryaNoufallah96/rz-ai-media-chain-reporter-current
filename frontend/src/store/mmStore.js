@@ -43,7 +43,6 @@ export const IMAGE_MODEL_OPTIONS = [
   { value:'openai/gpt-5.4-image-2', label:'GPT-5.4 Image 2 (OpenAI)' },
   { value:'google/gemini-3.1-flash-image-preview', label:'Gemini 3.1 Flash Image (Google)' },
   { value:'google/gemini-3-pro-image-preview', label:'Gemini 3 Pro Image (Google)' },
-  { value:'x-ai/grok-imagine-image-quality', label:'Grok Imagine Quality (xAI)' },
   { value:'recraft/recraft-v4-pro', label:'Recraft V4 Pro' },
 ]
 
