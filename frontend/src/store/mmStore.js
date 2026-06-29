@@ -57,6 +57,12 @@ export const mkey = m => m.toLowerCase().replace(/\s+/g,'-')
 export const cacheKey = (articleId, platform, modelKey, mode) =>
   `${articleId}|${platform}|${modelKey}${mode ? `|${mode}` : ''}`
 
+// True when ANY selected media brand has Promo Copy toggled on. When this is true the
+// whole run is promo-only: news sources, filtering, and the editorial pipeline are all
+// skipped — we only generate promo ideas from the brand bibles. Read via useMmStore.getState().
+export const anyPromoOn = (state) =>
+  !!state.selectedMedia.some(m => state.promoMode && state.promoMode[m])
+
 function buildEmptyRouted() {
   const r = {}
   MEDIA_LIST.forEach(m => {

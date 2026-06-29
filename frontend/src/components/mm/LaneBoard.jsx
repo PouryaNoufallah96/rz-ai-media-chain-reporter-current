@@ -146,7 +146,7 @@ export default function MainArea({ mmReport, onOpenReport }) {
               <strong style={{color:'#9b72f5'}}>{mmReport.shortlistedCount}</strong> shortlisted ·{' '}
               {Object.keys(mmReport.perMedia||{}).length} AI editors chose from{' '}
               <strong style={{color:'#f0f2f8'}}>{mmReport.fetchedTotal}</strong> fetched ·{' '}
-              <strong style={{color:'#ef4455'}}>{(mmReport.allArticles||[]).filter(a=>a._pipelineStatus!=='too_old').length - mmReport.shortlistedCount}</strong> rejected ·{' '}
+              <strong style={{color:'#ef4455'}}>{Math.max(0, (mmReport.allArticles||[]).filter(a=>a._pipelineStatus!=='too_old').length - mmReport.shortlistedCount)}</strong> rejected ·{' '}
               <strong style={{color:'#f0a040'}}>{mmReport.tooOld}</strong> too old
             </span>
           </div>

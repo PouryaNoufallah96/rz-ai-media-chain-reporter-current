@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useMmStore, API_BASE, MM_SOURCES, SRC_COLORS, EDITORIAL_MODEL_META, mkey } from '../store/mmStore'
+import { useMmStore, API_BASE, MM_SOURCES, SRC_COLORS, EDITORIAL_MODEL_META, mkey, anyPromoOn } from '../store/mmStore'
 import { fetchRSS, parseRSS, filterByRecency, timeAgo } from '../utils/rss'
 import { preScore } from '../utils/scoring'
 
@@ -36,11 +36,28 @@ export function useAnalyzeAndRoute() {
             setErrorMsg, setModelLanes, setPlatformLanes, setLastShortlist,
             setEditorial, setMmReport, promoMode, promoPrompts } = useMmStore.getState()
 
-    const promoBrands = selectedMedia.filter(m => promoMode[m] && promoPrompts[m]?.trim())
-    const editorialBrands = selectedMedia.filter(m => !promoBrands.includes(m))
+    // ── Promo-only rule ──
+    // If ANY selected brand has Promo Copy ON, the whole run is promo-only:
+    // news sources, filtering, and the editorial pipeline are all skipped.
+    // Only promo brands run; a brand with promo OFF can't mix into a promo run.
+    const promoActive = anyPromoOn(useMmStore.getState())
+    let promoBrands, editorialBrands
+    if (promoActive) {
+      promoBrands = selectedMedia.filter(m => promoMode[m] && promoPrompts[m]?.trim())
+      editorialBrands = []                       // no news at all in a promo run
+      if (!promoBrands.length) {
+        setErrorMsg('Promo mode is on — enter a prompt for at least one brand, or turn Promo Copy off to run news.')
+        return
+      }
+    } else {
+      promoBrands = []
+      editorialBrands = selectedMedia.filter(m => true)
+    }
 
     if (!editorialBrands.length && !promoBrands.length) { setErrorMsg('Select at least one media brand.'); return }
-    if (editorialBrands.length && !selectedSources.length) { setErrorMsg('Select at least one source (or use Promo Copy for all brands).'); return }
+    if (!promoActive && editorialBrands.length && !selectedSources.length) {
+      setErrorMsg('Select at least one source.'); return
+    }
     if (!selectedMedia.length)   { setErrorMsg('Select at least one media brand.'); return }
 
     setAnalyzing(true)
@@ -62,6 +79,7 @@ export function useAnalyzeAndRoute() {
       // ── Promo brands: generate ideas (no articles needed) ──
       if (promoBrands.length) {
         setProgress(5, `Generating promo ideas for ${promoBrands.length} brand${promoBrands.length>1?'s':''}…`)
+        let promoErrorShown = false
         for (const brand of promoBrands) {
           for (const modelKey of selectedModels) {
             try {
@@ -69,8 +87,14 @@ export function useAnalyzeAndRoute() {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({ brand, prompt:promoPrompts[brand], modelKey })
               })
-              if (!res.ok) { const e=await res.json().catch(()=>({})); console.warn(`Promo ${brand}/${modelKey}:`, e?.error); continue }
-              const data = await res.json()
+              const data = await res.json().catch(()=>({}))
+              if (!res.ok || data.error) {
+                const reason = data.error || `HTTP ${res.status}`
+                console.warn(`Promo ${brand}/${modelKey}:`, reason)
+                // Surface the first error to the user so failures aren't silent empty lanes.
+                if (!promoErrorShown) { setErrorMsg(`Promo ${brand} (${modelKey}): ${reason}`); promoErrorShown = true }
+                continue
+              }
               const meta = EDITORIAL_MODEL_META[modelKey]
               const existing = useMmStore.getState().modelLanes[modelKey] || {}
               const lanes = { ...existing }
@@ -261,17 +285,24 @@ export function useAnalyzeAndRoute() {
       selectedMedia.forEach(brand => { platformLanes[brand]={}; selectedPlatforms.forEach(p=>{platformLanes[brand][p]=[]}) })
       setPlatformLanes(platformLanes)
 
-      // Build report
+      // Build report — count ACTUAL promo cards that made it into the lanes, not a
+      // fabricated number (the old arithmetic lied: it claimed "4 shortlisted" even
+      // when every promo fetch failed and the lanes were empty).
       const perMedia = {}
       selectedMedia.forEach(m=>{perMedia[m]=0})
       Object.values(editorial).forEach(md => { const bm=md.brands||{}; Object.entries(bm).forEach(([brand,arts]) => { if(perMedia.hasOwnProperty(brand)) perMedia[brand]+=(arts?.length||0) }) })
-      promoBrands.forEach(m => { perMedia[m] = (perMedia[m]||0) + 3 })
+      let actualPromoTotal = 0
+      promoBrands.forEach(m => {
+        const n = selectedModels.reduce((s,k) => s + (useMmStore.getState().modelLanes[k]?.[m]?.length||0), 0)
+        perMedia[m] = (perMedia[m]||0) + n
+        actualPromoTotal += n
+      })
       const shortlisted = preResult?.shortlisted || shortlistPayload
       setMmReport({
         runAt:Date.now(), selectedSources:[...selectedSources], selectedMedia:[...selectedMedia],
         recencyHours, sourceCounts, fetchedTotal:allArticles.length, tooOld:tooOldCount,
         afterRecency:recent.length, rejected:preResult?.rejected||{duplicate:0,noMediaFit:0,lowScore:0},
-        shortlistedCount:shortlistPayload.length + promoBrands.length*3, perMedia, filterMode,
+        shortlistedCount:shortlistPayload.length + actualPromoTotal, perMedia, filterMode,
         allArticles:[...tooOldArticles,...allTracked],
       })
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useMmStore, API_BASE, MM_SOURCES, MEDIA_COLORS, PLAT_COLORS, EDITORIAL_MODEL_META } from '../../store/mmStore'
+import { useMmStore, API_BASE, MM_SOURCES, MEDIA_COLORS, PLAT_COLORS, EDITORIAL_MODEL_META, anyPromoOn } from '../../store/mmStore'
 
 const CHECK_SVG = <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#07090e" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
 const CHECK_SVG_W = <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -28,6 +28,10 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
           selectedModels, analyzing, progress, errorMsg, promoMode, promoPrompts,
           toggleMedia, togglePlatform, toggleSource, toggleModel, setRecencyHours, setFilterMode,
           togglePromoMode, setPromoPrompt } = useMmStore()
+
+  // When any brand has Promo Copy ON, the whole run is promo-only — sources and filtering
+  // are irrelevant (no news is fetched), so those controls are disabled here.
+  const promoActive = anyPromoOn(useMmStore.getState())
 
   const [topicInput, setTopicInput] = useState('')
   const [topicChips, setTopicChips] = useState([])
@@ -148,8 +152,11 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
         </div>
 
         {/* ③ Sources */}
-        <div>
-          <label style={LABEL_STYLE}>③ Select Source</label>
+        <div style={promoActive ? {opacity:.4, pointerEvents:'none'} : undefined}>
+          <label style={LABEL_STYLE}>③ Select Source{promoActive ? '  ·  Promo mode' : ''}</label>
+          {promoActive && (
+            <p style={{fontSize:10,color:'#f0a040',marginBottom:8}}>Promo mode — sources not used.</p>
+          )}
           <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
             {Object.keys(MM_SOURCES).map(src => (
               <button key={src} className={`src-chip${selectedSources.includes(src)?' on':''}`} onClick={()=>toggleSource(src)}>{src}</button>
@@ -183,8 +190,11 @@ export default function Sidebar({ topics, setTopics, onAnalyze }) {
         </div>
 
         {/* ⑥ Filter Engine */}
-        <div>
+        <div style={promoActive ? {opacity:.4, pointerEvents:'none'} : undefined}>
           <label style={{...LABEL_STYLE,marginBottom:6}}>⑥ Filter Engine</label>
+          {promoActive && (
+            <p style={{fontSize:10,color:'#f0a040',marginBottom:8}}>Promo mode — no filtering needed.</p>
+          )}
           <div style={{display:'flex',flexDirection:'column',gap:6}}>
             {filterOptions.map(f => (
               <ToggleRow key={f.key} on={filterMode===f.key} color={f.color} abbr={f.abbr} label={f.label} sub={f.sub} onClick={()=>setFilterMode(f.key)} filterEngine />
