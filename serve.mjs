@@ -40,6 +40,9 @@ function send(req, res, filePath, contentType) {
 
     const ext = path.extname(filePath).toLowerCase();
     const acceptsGzip = (req.headers['accept-encoding'] || '').includes('gzip');
+    const cacheControl = ext === '.html'
+      ? 'no-store'
+      : 'public, max-age=31536000, immutable';
 
     if (acceptsGzip && COMPRESSIBLE.has(ext)) {
       let gz = gzipCache.get(filePath);
@@ -48,11 +51,12 @@ function send(req, res, filePath, contentType) {
         'Content-Type': contentType,
         'Content-Encoding': 'gzip',
         'Content-Length': gz.length,
+        'Cache-Control': cacheControl,
       });
       return res.end(gz);
     }
 
-    res.writeHead(200, { 'Content-Type': contentType, 'Content-Length': data.length });
+    res.writeHead(200, { 'Content-Type': contentType, 'Content-Length': data.length, 'Cache-Control': cacheControl });
     res.end(data);
   });
 }
@@ -61,13 +65,36 @@ function sendFallback(res) {
   // SPA fallback: unknown paths → index.html (React Router handles routing)
   fs.readFile(FALLBACK, (err2, html) => {
     if (err2) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': html.length });
+  res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': html.length, 'Cache-Control': 'no-store' });
     res.end(html);
   });
 }
 
+function proxyApi(req, res) {
+  const upstream = http.request({
+    hostname: '127.0.0.1',
+    port: 3001,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: '127.0.0.1:3001' },
+  }, (upstreamRes) => {
+    res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+    upstreamRes.pipe(res);
+  });
+
+  upstream.on('error', () => {
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+    }
+    res.end(JSON.stringify({ error: 'Backend service is unavailable' }));
+  });
+
+  req.pipe(upstream);
+}
+
 const server = http.createServer((req, res) => {
   let urlPath = req.url.split('?')[0];
+  if (urlPath.startsWith('/api/')) return proxyApi(req, res);
   if (urlPath === '/') urlPath = '/index.html';
 
   const filePath = path.join(DIST, urlPath);

@@ -301,3 +301,6 @@
   .auth-left-footer { position: static; margin-top: 1rem; }
   .auth-right { padding-right: 0; }
 }
+html[dir='rtl'] .auth-wrap{direction:rtl;}
+html[dir='rtl'] .auth-left{order:2;}
+html[dir='rtl'] .auth-right{order:1;}

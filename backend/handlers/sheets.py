@@ -8,7 +8,7 @@ def call_apps_script(payload):
         raise ValueError('GOOGLE_APPS_SCRIPT_URL not configured in .env')
     r = requests.post(SCRIPT_URL, json=payload,
                       headers={'Content-Type': 'application/json'},
-                      allow_redirects=True, timeout=30)
+                      allow_redirects=True, timeout=(5, 15))
     r.raise_for_status()
     data = r.json()
     if not data.get('success'):

@@ -6,7 +6,12 @@ import MainArea from '../components/mm/LaneBoard'
 import PreviewPanel from '../components/mm/PreviewPanel'
 import NavBar from '../components/NavBar'
 import FilteringReportModal from '../components/mm/FilteringReportModal'
+import ChatWidget from '../components/chat/ChatWidget'
+import { useLanguageStore } from '../store/languageStore'
 import './MultimediaPage.css'
+
+const SIDEBAR_MIN_WIDTH = 262
+const SIDEBAR_MAX_WIDTH = 560
 
 // Load the HuggingFace semantic router as a module script (same as original)
 let _semLoaded = false
@@ -59,18 +64,52 @@ window._semRouter = { embedArticles, _initPromise };
 }
 
 export default function MultimediaPage() {
-  const { mmReport, setReportOpen, initPlatformLanes } = useMmStore()
+  const { mmReport, setReportOpen, initPlatformLanes, activeCard } = useMmStore()
+  const language = useLanguageStore(state => state.language)
+  const previewSessionKey = activeCard
+    ? `${activeCard.id || ''}|${activeCard.platform || ''}|${activeCard.headline || ''}`
+    : 'closed'
   const analyzeAndRoute = useAnalyzeAndRoute()
   const [topics, setTopics] = useState('')
   const [navOpen, setNavOpen] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = Number(window.localStorage.getItem('chainreporter-sidebar-width'))
+    return Number.isFinite(saved) ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, saved)) : SIDEBAR_MIN_WIDTH
+  })
 
   useEffect(() => {
     loadSemRouter()
     initPlatformLanes()
   }, [])
 
+  useEffect(() => {
+    window.localStorage.setItem('chainreporter-sidebar-width', String(sidebarWidth))
+  }, [sidebarWidth])
+
   function handleAnalyze() {
     analyzeAndRoute(topics)
+  }
+
+  function startSidebarResize(event) {
+    if (window.innerWidth <= 768) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = sidebarWidth
+    const previousUserSelect = document.body.style.userSelect
+    document.body.style.userSelect = 'none'
+
+    const onMove = moveEvent => {
+      const dragDistance = moveEvent.clientX - startX
+      const width = startWidth + (language === 'fa' ? -dragDistance : dragDistance)
+      setSidebarWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width)))
+    }
+    const onUp = () => {
+      document.body.style.userSelect = previousUserSelect
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
   }
 
   return (
@@ -79,11 +118,13 @@ export default function MultimediaPage() {
       <div id="mob-backdrop" className={navOpen?'open':''} onClick={()=>setNavOpen(false)}></div>
       <NavBar onToggleNav={()=>setNavOpen(o=>!o)} navOpen={navOpen} />
       <div id="mm-layout" style={{position:'relative',zIndex:10}}>
-        <Sidebar topics={topics} setTopics={setTopics} onAnalyze={handleAnalyze} />
+        <Sidebar topics={topics} setTopics={setTopics} onAnalyze={handleAnalyze} width={sidebarWidth} />
+        <div id="mm-sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize control panel" onMouseDown={startSidebarResize} />
         <MainArea mmReport={mmReport} onOpenReport={() => setReportOpen(true)} />
       </div>
-      <PreviewPanel />
+      <PreviewPanel key={previewSessionKey} />
       <FilteringReportModal />
+      <ChatWidget activeCard={activeCard} />
     </>
   )
 }

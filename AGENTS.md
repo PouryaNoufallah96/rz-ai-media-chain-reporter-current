@@ -48,3 +48,15 @@ Read this first, every session. Then read only the file(s) you actually need.
 - **Start backend**: `cd backend && python server.py` (port 3001). **Frontend**: `cd frontend && npm run dev`.
 - Keep `MEDIA_LIST` in `backend/config.py` in sync with `frontend/src/store/mmStore.js`.
 - Routes are dispatched by exact path string in `server.py` `Handler.do_GET` / `do_POST` — add new routes there.
+## VPS update recipe
+- ChainReporter deploy target is locked by `DEPLOYMENT_TARGET.lock`: VPS `5.75.207.209`, remote root `/var/www/chainreporter`, services `chainreporter-backend` and `chainreporter-frontend`.
+- Never deploy this folder to the forbidden VPS `51.255.163.171` or remote root `/var/www/rzecosystem`.
+- Use `deploy-to-vps.ps1` with an explicit `-Files` list for the files changed in the task; do not rely on Git auto-detection in this folder because the worktree may contain unrelated edits.
+- Workspace deploy key filename: `.deploy_chainreporter_vps_key` (gitignored). The deploy script auto-selects it, canonicalizes it into `%TEMP%`, and grants access to the actual process user from `whoami` so Codex sandbox users can SSH.
+- Normal deploy command shape:
+  `powershell -ExecutionPolicy Bypass -File .\deploy-to-vps.ps1 -Files "frontend/src/path.jsx,backend/handlers/file.py"`
+- If key access fails, check the workspace key grants the current process user from `whoami`, not just `$env:USERNAME`:
+  `icacls .\.deploy_chainreporter_vps_key /grant:r "$((whoami).Trim()):(R)"`
+- If a private key was pasted into chat or copied manually, rotate it on the VPS after use.
+- After deploy, verify remotely:
+  `ssh -i <key> root@5.75.207.209 "systemctl is-active chainreporter-backend; systemctl is-active chainreporter-frontend; curl -fsS http://127.0.0.1:3001/api/health"`

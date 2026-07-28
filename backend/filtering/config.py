@@ -2,7 +2,7 @@
 DEDUP_COSINE        = 0.92   # cosine ≥ this → same event
 DEFAULT_THRESHOLD   = 0.32   # min routing cosine for normal brands
 CATCHALL_THRESHOLD  = 0.24   # lower threshold for ChainReporter catch-all
-TOP_N_PER_BRAND     = 20     # survivors sent to the AI stage per brand
+TOP_N_PER_BRAND     = 10     # survivors sent to the AI stage per brand
 EMBED_BATCH         = 128    # texts per OpenAI embeddings API request
 
 # ── Source authority scores (0-100; unknown → 55) ──────────────────────────────

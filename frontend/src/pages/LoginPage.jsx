@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import './AuthPage.css'
@@ -52,6 +52,17 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  useEffect(() => {
+    const root = document.documentElement
+    const previous = { lang: root.lang, dir: root.dir }
+    root.lang = 'en'
+    root.dir = 'ltr'
+    return () => {
+      root.lang = previous.lang
+      root.dir = previous.dir
+    }
+  }, [])
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!identifier || !password || submitting) return
@@ -62,7 +73,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-page">
+    <div className="auth-page" data-no-localize="true">
       <div aria-hidden="true" className="auth-glow"></div>
 
       <div className="auth-wrap">

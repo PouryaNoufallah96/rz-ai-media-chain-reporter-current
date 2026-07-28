@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
+import { useLanguageStore, t } from '../store/languageStore'
 import './NavBar.css'
 
 export default function NavBar({ onToggleNav, navOpen: navOpenProp }) {
@@ -9,6 +10,7 @@ export default function NavBar({ onToggleNav, navOpen: navOpenProp }) {
   const toggle  = onToggleNav || (() => setInternalOpen(o => !o))
   const { pathname } = useLocation()
   const { user } = useAuthStore()
+  const { language, toggleLanguage } = useLanguageStore()
   const linkClass = (path) => `nav-link${pathname.startsWith(path) ? ' active' : ''}`
   const initial = user?.username ? user.username[0].toUpperCase() : '?'
 
@@ -32,12 +34,16 @@ export default function NavBar({ onToggleNav, navOpen: navOpenProp }) {
         </Link>
 
         <div id="mob-nav-links" style={{display:'flex',alignItems:'center',gap:2}} className={navOpen?'open':''}>
-          <Link to="/multimedia" className={linkClass('/multimedia')}>Multi Media</Link>
-          <Link to="/about" className={linkClass('/about')}>About Us</Link>
-          <Link to="/account" className={linkClass('/account')}>Account</Link>
+          <Link to="/multimedia" className={linkClass('/multimedia')}>{t(language, 'Multi Media')}</Link>
+          <Link to="/studio" className={linkClass('/studio')}>{t(language, 'Studio')}</Link>
+          <Link to="/about" className={linkClass('/about')}>{t(language, 'About Us')}</Link>
+          <Link to="/account" className={linkClass('/account')}>{t(language, 'Account')}</Link>
         </div>
 
         <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <button type="button" className="language-toggle" onClick={toggleLanguage} title={language === 'fa' ? 'Switch to English' : 'تغییر به فارسی'}>
+            <span aria-hidden="true">◉</span><span>{language === 'fa' ? 'EN' : 'فا'}</span>
+          </button>
           <button id="mob-menu-btn" onClick={toggle}
             style={{display:'none',width:36,height:36,borderRadius:8,background:'none',border:'none',cursor:'pointer',color:'#7a8499',alignItems:'center',justifyContent:'center',transition:'color .18s,background .18s'}}
             onMouseEnter={e=>{e.currentTarget.style.color='#f0f2f8';e.currentTarget.style.background='rgba(255,255,255,.05)'}}

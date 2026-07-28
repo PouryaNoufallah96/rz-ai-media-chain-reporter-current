@@ -65,7 +65,7 @@ def execute_scheduled_post(row):
             handle_telegram_post({
                 'imageB64': image_b64, 'headline': row['headline'],
                 'copy': row.get('copy') or '', 'hashtags': hashtags,
-                'link': row.get('source_link') or '',
+                'link': row.get('source_link') or '', 'mediaBrand': row.get('brand') or '',
             })
         elif platform == 'X':
             handle_twitter_post({

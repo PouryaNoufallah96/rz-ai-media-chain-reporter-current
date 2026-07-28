@@ -3,7 +3,7 @@ import { create } from 'zustand'
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:3001'
-  : `http://${window.location.hostname}:3001`
+  : ''
 
 export const MM_SOURCES = {
   'CoinDesk':      'https://www.coindesk.com/arc/outboundfeeds/rss/',
@@ -25,6 +25,70 @@ export const MM_SOURCES = {
   'Chainalysis Blog':'https://blog.chainalysis.com/feed/',
 }
 
+export const TELEGRAM_SOURCES = {
+  'Cointelegraph': 'cointelegraph',
+  'Coingraph News': 'CoingraphNews',
+  'CoinDesk Global': 'CoinDeskGlobal',
+  'The Block Crypto': 'the_block_crypto',
+  'Decrypt News': 'DecryptNews',
+  'Lookonchain': 'lookonchainchannel',
+  'Whale Alert': 'whale_alert_io',
+  'CoinMarketCap Announcements': 'CoinMarketCapAnnouncements',
+  'CoinMarketCap': 'CoinMarketCap',
+  'Watcher Guru': 'WatcherGuru',
+  'Wu Blockchain': 'wublockchainenglish',
+  'Binance Announcements': 'binance_announcements',
+  'OKX Announcements': 'OKXAnnouncements',
+  'CryptoQuant': 'cryptoquant_official',
+  'Glassnode': 'glassnode',
+  'Crypto News': 'crypto_news',
+  'CryptoDiffer': 'cryptodiffer',
+  'CryptoRank News': 'CryptoRankNews',
+  'DWF Labs': 'dwflabs',
+  'Gamee': 'gameechannel',
+  'Polymarket Now': 'polymarketnow',
+  'InnMind': 'innmind',
+  'Chainalysis': 'chainalysisinc',
+  'Hacken': 'hackenai',
+  'DHL Logistics': 'lotdhl',
+  'MultiBank Group': 'MultiBankio_Announcements',
+  'Coins.ph Announcements': 'coinsph_announcements',
+  'Gram': 'gram',
+  'Unfolded': 'unfolded',
+}
+
+export const TELEGRAM_SOURCE_PROFILES = {
+  cointelegraph: { category:'news', focus:'Breaking crypto news, markets, and policy.', tags:['News', 'Markets', 'Policy'], brands:['ChainReporter', 'RZ Prime'] },
+  CoingraphNews: { category:'news', focus:'Fast market headlines and crypto trend updates.', tags:['News', 'Markets', 'Trends'], brands:['ChainReporter'] },
+  CoinDeskGlobal: { category:'institutional', focus:'Institutional markets, policy, and industry reporting.', tags:['Institutional', 'Markets', 'Policy'], brands:['ChainReporter', 'RZ Prime'] },
+  the_block_crypto: { category:'research', focus:'Research-led crypto coverage and industry reporting.', tags:['Research', 'Markets', 'Policy'], brands:['ChainReporter'] },
+  DecryptNews: { category:'news', focus:'Web3, culture, and accessible crypto reporting.', tags:['Web3', 'Culture', 'News'], brands:['Coin Hall', 'ChainReporter'] },
+  lookonchainchannel: { category:'onchain', focus:'Wallet movements, whale activity, and on-chain signals.', tags:['On-chain', 'Whales', 'Alerts'], brands:['RZ Prime', 'ChainReporter'] },
+  whale_alert_io: { category:'onchain', focus:'Large transfers and supply movement alerts.', tags:['Whales', 'Alerts', 'Flows'], brands:['RZ Prime', 'ChainReporter'] },
+  CoinMarketCapAnnouncements: { category:'exchange', focus:'Listings, token events, and platform campaigns.', tags:['Listings', 'Campaigns', 'Tokens'], brands:['RZ Prime', 'Coin Hall'] },
+  CoinMarketCap: { category:'data', focus:'Broad market data and ecosystem updates.', tags:['Data', 'Markets', 'Tokens'], brands:['ChainReporter', 'RZ Prime'] },
+  WatcherGuru: { category:'news', focus:'Fast crypto, macro, and market headlines.', tags:['News', 'Macro', 'Markets'], brands:['ChainReporter'] },
+  wublockchainenglish: { category:'research', focus:'Asia, mining, exchange, and policy developments.', tags:['Asia', 'Mining', 'Policy'], brands:['ChainReporter', 'RZ Prime'] },
+  binance_announcements: { category:'exchange', focus:'Exchange products, listings, campaigns, and launches.', tags:['Exchange', 'Listings', 'Campaigns'], brands:['RZ Prime', 'Coin Hall'] },
+  OKXAnnouncements: { category:'exchange', focus:'OKX product, listing, and ecosystem announcements.', tags:['Exchange', 'Listings', 'Web3'], brands:['RZ Prime', 'Coin Hall'] },
+  cryptoquant_official: { category:'data', focus:'On-chain metrics and market structure research.', tags:['On-chain', 'Data', 'Research'], brands:['ChainReporter', 'RZ Prime'] },
+  glassnode: { category:'data', focus:'Institutional-grade on-chain and market research.', tags:['On-chain', 'Research', 'Markets'], brands:['ChainReporter', 'RZ Prime'] },
+  crypto_news: { category:'news', focus:'Broad daily crypto news coverage.', tags:['News', 'Markets', 'Web3'], brands:['ChainReporter'] },
+  cryptodiffer: { category:'data', focus:'Visual market intelligence and crypto research.', tags:['Data', 'Research', 'Markets'], brands:['ChainReporter', 'RZ Prime'] },
+  CryptoRankNews: { category:'data', focus:'Rankings, fundraising, token data, and market calendars.', tags:['Rankings', 'Funding', 'Data'], brands:['RZ Prime', 'Coin Hall'] },
+  dwflabs: { category:'funding', focus:'Market-maker, investment, and ecosystem activity.', tags:['Funding', 'Liquidity', 'Web3'], brands:['Coin Hall', 'ChainReporter'] },
+  gameechannel: { category:'gaming', focus:'Gaming, Telegram community, and engagement signals.', tags:['Gaming', 'Community', 'TON'], brands:['Coin Hall'] },
+  polymarketnow: { category:'markets', focus:'Prediction-market odds and live event signals.', tags:['Prediction', 'Markets', 'Signals'], brands:['ChainReporter', 'RZ Prime'] },
+  innmind: { category:'funding', focus:'Web3 startups, fundraising, founders, and venture activity.', tags:['Startups', 'Funding', 'Founders'], brands:['Coin Hall', 'ChainReporter'] },
+  chainalysisinc: { category:'security', focus:'Compliance, regulation, investigations, and risk.', tags:['Regulation', 'Compliance', 'Risk'], brands:['Meta Coin Guard', 'ChainReporter'] },
+  hackenai: { category:'security', focus:'Smart-contract security, audits, and project risk.', tags:['Security', 'Audits', 'Risk'], brands:['Meta Coin Guard'] },
+  lotdhl: { category:'logistics', focus:'Global logistics, supply chains, and trade signals.', tags:['Logistics', 'Supply chain', 'Trade'], brands:['ChainReporter'] },
+  MultiBankio_Announcements: { category:'institutional', focus:'Traditional finance, brokerage, and market activity.', tags:['Finance', 'Trading', 'Markets'], brands:['ChainReporter', 'RZ Prime'] },
+  coinsph_announcements: { category:'exchange', focus:'Regional exchange campaigns, launches, and adoption.', tags:['Exchange', 'Campaigns', 'Adoption'], brands:['RZ Prime', 'Coin Hall'] },
+  gram: { category:'gaming', focus:'Telegram-native ecosystem and TON community signals.', tags:['TON', 'Community', 'Ecosystem'], brands:['Coin Hall', 'RZ Prime'] },
+  unfolded: { category:'markets', focus:'Macro context, market data, and visual explainers.', tags:['Macro', 'Data', 'Markets'], brands:['ChainReporter', 'RZ Prime'] },
+}
+
 export const SRC_COLORS = {
   'CoinDesk':'#3d8ef0','Cointelegraph':'#f0a040','Decrypt':'#ef4455',
   'CryptoSlate':'#9b72f5','The Block':'#3d8ef0','Blockworks':'#00d4a0',
@@ -32,6 +96,15 @@ export const SRC_COLORS = {
   'U.Today':'#00d4a0','NewsBTC':'#ef4455','CryptoPotato':'#f0a040',
   'The Defiant':'#00d4a0','AMBCrypto':'#9b72f5',
   'Chainlink Blog':'#375bd2','DL News':'#ef4455','Chainalysis Blog':'#00d4a0',
+  'Coingraph News':'#f0a040','CoinDesk Global':'#3d8ef0','The Block Crypto':'#00d4a0',
+  'Decrypt News':'#ef4455','Lookonchain':'#22d3ee','Whale Alert':'#9b72f5',
+  'CoinMarketCap Announcements':'#f0b90b','CoinMarketCap':'#3861fb',
+  'Watcher Guru':'#00d4a0','Wu Blockchain':'#22d3ee','Binance Announcements':'#f0b90b',
+  'OKX Announcements':'#f0f2f8','CryptoQuant':'#4ade80','Glassnode':'#3d8ef0','Crypto News':'#9b72f5',
+  'CryptoDiffer':'#7c6cff','CryptoRank News':'#f0a040','DWF Labs':'#ff6b6b','Gamee':'#00d4a0',
+  'Polymarket Now':'#f0f2f8','InnMind':'#9b72f5','Chainalysis':'#375bd2','Hacken':'#4ade80',
+  'DHL Logistics':'#f0b90b','MultiBank Group':'#00a6e8','Coins.ph Announcements':'#00d4a0',
+  'Gram':'#22d3ee','Unfolded':'#ef4455',
 }
 
 export const MEDIA_LIST      = ['RZ Prime','Coin Hall','ChainReporter','Meta Coin Guard']
@@ -40,16 +113,16 @@ export const MEDIA_COLORS    = {'RZ Prime':'#f0a040','Coin Hall':'#00d4ff','Chai
 export const PLAT_COLORS     = {X:'#00d4ff',Telegram:'#00d4a0',Instagram:'#e1306c'}
 
 export const IMAGE_MODEL_OPTIONS = [
-  { value:'openai/gpt-5.4-image-2', label:'GPT-5.4 Image 2 (OpenAI)' },
-  { value:'google/gemini-3.1-flash-image-preview', label:'Gemini 3.1 Flash Image (Google)' },
-  { value:'google/gemini-3-pro-image-preview', label:'Gemini 3 Pro Image (Google)' },
-  { value:'recraft/recraft-v4-pro', label:'Recraft V4 Pro' },
+  { value:'openai/gpt-5.4-image-2', label:'GPT-5.4 Image 2 (OpenAI)', tier:'Premium', description:'Highest-fidelity editorial concepts and complex prompts.', maxReferences:3 },
+  { value:'google/gemini-3.1-flash-image-preview', label:'Gemini 3.1 Flash Image (Google)', tier:'Balanced', description:'Fast generation with strong prompt understanding.', maxReferences:3 },
+  { value:'google/gemini-3-pro-image-preview', label:'Gemini 3 Pro Image (Google)', tier:'Premium', description:'Detailed compositions and advanced visual reasoning.', maxReferences:3 },
+  { value:'recraft/recraft-v4-pro', label:'Recraft V4 Pro', tier:'Design', description:'Polished graphic design and high-resolution layouts.', maxReferences:1 },
 ]
 
 export const EDITORIAL_MODEL_META = {
   gpt:      { display:'GPT-5.5',              color:'#10a37f', badge:'OpenAI',    desc:'Best general-purpose editorial AI' },
   gemini:   { display:'Gemini 3.1 Pro Preview',color:'#4285f4', badge:'Google',    desc:'Strong reasoning · multimodal' },
-  claude:   { display:'Claude Opus 4.7',       color:'#d97706', badge:'Anthropic', desc:'Top reasoning benchmark score' },
+  claude:   { display:'Claude Opus 4.8',       color:'#d97706', badge:'Anthropic', desc:'Top reasoning benchmark score' },
   deepseek: { display:'DeepSeek V4 Flash',     color:'#22d3ee', badge:'DeepSeek',  desc:'Fast · cost-efficient · strong reasoning' },
 }
 
@@ -80,12 +153,14 @@ export const useMmStore = create((set, get) => ({
   recencyHours:      24,
   filterMode:        'preprocess',   // 'preprocess' | 'openai_embedding' | 'deepseek_preprocess' | 'test'
   testMode:          false,
+  enrichArticles:    true,   // fetch + summarize source articles for richer AI picks
   routed:            buildEmptyRouted(),
   activeCard:        null,
   editorial:         null,
   lastShortlist:     [],
   selectedModels:    ['gpt','gemini','claude','deepseek'],
   modelLanes:        { gpt:{}, gemini:{}, claude:{}, deepseek:{} },
+  telegramLanes:     {},
   platformLanes:     {},
   copyCache:         {},
   promoMode:         {},
@@ -95,18 +170,27 @@ export const useMmStore = create((set, get) => ({
   errorMsg:          '',
   mmReport:          null,
   reportOpen:        false,
+  useTelegramSources: false,
+  telegramMode:      'both', // 'both' | 'telegram_only'
+  telegramOnlySavedSources: [],
+  telegramOnlySavedModels:  [],
+  selectedTelegramSources: ['cointelegraph'],
+  telegramSortMode:  'views',
+  telegramTopN:      20,
 
   // ── Setters ──
   setSelectedMedia:     v  => set({ selectedMedia: v }),
   setSelectedPlatforms: v  => set({ selectedPlatforms: v }),
-  setSelectedSources:   v  => set({ selectedSources: v }),
+  setSelectedSources:   v  => set(s => s.telegramMode === 'telegram_only' ? {} : { selectedSources: v }),
   setRecencyHours:      h  => set({ recencyHours: h }),
   setFilterMode:        (mode) => set({ filterMode: mode, testMode: mode === 'test' }),
-  setSelectedModels:    v  => set({ selectedModels: v }),
+  setEnrichArticles:    v  => set({ enrichArticles: typeof v === 'boolean' ? v : !get().enrichArticles }),
+  setSelectedModels:    v  => set(s => s.telegramMode === 'telegram_only' ? { selectedModels: [v?.[0] || 'gpt'] } : { selectedModels: v }),
   setActiveCard:        c  => set({ activeCard: c }),
   setEditorial:         e  => set({ editorial: e }),
   setLastShortlist:     s  => set({ lastShortlist: s }),
   setModelLanes:        v  => set({ modelLanes: v }),
+  setTelegramLanes:     v  => set({ telegramLanes: v }),
   setPlatformLanes:     v  => set({ platformLanes: v }),
   setProgress:          (pct, label) => set({ progress: { pct, label } }),
   setAnalyzing:         v  => set({ analyzing: v }),
@@ -127,11 +211,53 @@ export const useMmStore = create((set, get) => ({
     return { selectedPlatforms: arr }
   }),
   toggleSource: (src) => set(s => {
+    if (s.telegramMode === 'telegram_only') return {}
     const arr = s.selectedSources.includes(src)
       ? s.selectedSources.filter(x => x !== src)
       : [...s.selectedSources, src]
     return { selectedSources: arr }
   }),
+  setUseTelegramSources: v => set(s => {
+    if (v) return { useTelegramSources: true }
+    if (s.telegramMode !== 'telegram_only') return { useTelegramSources: false }
+    return {
+      useTelegramSources: false,
+      telegramMode: 'both',
+      selectedSources: s.telegramOnlySavedSources,
+      selectedModels: s.telegramOnlySavedModels.length ? s.telegramOnlySavedModels : ['gpt'],
+      telegramOnlySavedSources: [],
+      telegramOnlySavedModels: [],
+    }
+  }),
+  setTelegramMode: mode => set(s => {
+    if (mode === 'telegram_only') {
+      return {
+        useTelegramSources: true,
+        telegramMode: 'telegram_only',
+        telegramOnlySavedSources: [...s.selectedSources],
+        telegramOnlySavedModels: [...s.selectedModels],
+        selectedSources: [],
+        selectedModels: ['gpt'],
+      }
+    }
+    if (s.telegramMode !== 'telegram_only') return { useTelegramSources: true, telegramMode: 'both' }
+    return {
+      useTelegramSources: true,
+      telegramMode: 'both',
+      selectedSources: s.telegramOnlySavedSources,
+      selectedModels: s.telegramOnlySavedModels.length ? s.telegramOnlySavedModels : ['gpt'],
+      telegramOnlySavedSources: [],
+      telegramOnlySavedModels: [],
+    }
+  }),
+  toggleTelegramSource: (src) => set(s => {
+    const arr = s.selectedTelegramSources.includes(src)
+      ? s.selectedTelegramSources.filter(x => x !== src)
+      : [...s.selectedTelegramSources, src]
+    return { selectedTelegramSources: arr }
+  }),
+  setTelegramSortMode: mode => set({ telegramSortMode: mode }),
+  setTelegramTopN: n => set({ telegramTopN: Number(n) || 5 }),
   initPlatformLanes: () => set(s => {
     const pl = {}
     s.selectedMedia.forEach(brand => {
@@ -142,6 +268,7 @@ export const useMmStore = create((set, get) => ({
   }),
 
   toggleModel: (key) => set(s => {
+    if (s.telegramMode === 'telegram_only') return { selectedModels: [key] }
     if (s.selectedModels.includes(key)) {
       if (s.selectedModels.length === 1) return {}
       return { selectedModels: s.selectedModels.filter(k => k !== key) }
@@ -160,6 +287,10 @@ export const useMmStore = create((set, get) => ({
       })
       modelLanes[mk] = lanes
     })
+    const telegramLanes = { ...s.telegramLanes }
+    Object.keys(telegramLanes).forEach(brand => {
+      telegramLanes[brand] = telegramLanes[brand].map(c => c.id === cardId ? { ...c, status, ...extra } : c)
+    })
     // Update in platformLanes
     const platformLanes = { ...s.platformLanes }
     Object.keys(platformLanes).forEach(brand => {
@@ -169,7 +300,7 @@ export const useMmStore = create((set, get) => ({
       })
       platformLanes[brand] = lanes
     })
-    return { activeCard, modelLanes, platformLanes }
+    return { activeCard, modelLanes, telegramLanes, platformLanes }
   }),
 
   updateCard: (cardId, extra = {}) => set(s => {
@@ -182,6 +313,10 @@ export const useMmStore = create((set, get) => ({
       })
       modelLanes[mk] = lanes
     })
+    const telegramLanes = { ...s.telegramLanes }
+    Object.keys(telegramLanes).forEach(brand => {
+      telegramLanes[brand] = telegramLanes[brand].map(c => c.id === cardId ? { ...c, ...extra } : c)
+    })
     const platformLanes = { ...s.platformLanes }
     Object.keys(platformLanes).forEach(brand => {
       const lanes = { ...platformLanes[brand] }
@@ -190,7 +325,28 @@ export const useMmStore = create((set, get) => ({
       })
       platformLanes[brand] = lanes
     })
-    return { activeCard, modelLanes, platformLanes }
+    return { activeCard, modelLanes, telegramLanes, platformLanes }
+  }),
+
+  // Update only the unrouted source copies. Generated platform cards with the
+  // same article id keep their own platform-specific copy and variants.
+  updateSourceCard: (cardId, extra = {}) => set(s => {
+    const activeCard = s.activeCard?.id === cardId && (!s.activeCard.platform || s.activeCard.platform === 'suggested')
+      ? { ...s.activeCard, ...extra }
+      : s.activeCard
+    const modelLanes = { ...s.modelLanes }
+    Object.keys(modelLanes).forEach(modelKey => {
+      const lanes = { ...modelLanes[modelKey] }
+      Object.keys(lanes).forEach(brand => {
+        lanes[brand] = lanes[brand].map(card => card.id === cardId ? { ...card, ...extra } : card)
+      })
+      modelLanes[modelKey] = lanes
+    })
+    const telegramLanes = { ...s.telegramLanes }
+    Object.keys(telegramLanes).forEach(brand => {
+      telegramLanes[brand] = telegramLanes[brand].map(card => card.id === cardId ? { ...card, ...extra } : card)
+    })
+    return { activeCard, modelLanes, telegramLanes }
   }),
 
   // Like updateCard, but scoped to a single platform — the same article can be routed to

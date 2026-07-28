@@ -1,0 +1,8 @@
+project_id=chainreporter
+project_name=ChainReporter
+vps_ip=5.75.207.209
+remote_root=/var/www/chainreporter
+backend_service=chainreporter-backend
+frontend_service=chainreporter-frontend
+forbid_vps_ip=51.255.163.171
+forbid_remote_root=/var/www/rzecosystem

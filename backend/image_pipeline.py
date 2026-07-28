@@ -166,7 +166,13 @@ def call_art_director(article, copy_text, sentiment, platform, profile, recent, 
     )
     msgs = [{'role': 'system', 'content': sys_prompt},
             {'role': 'user',   'content': user_msg}]
-    return openrouter_chat(EDITORIAL_MODELS['gpt']['id'], msgs, ART_DIRECTOR_TEMPERATURE, ART_DIRECTOR_MAX_TOKENS)
+    # Keep GPT-5.5 for the Art Director brief. Tight 30s deadline bounds the
+    # retry chain so a stalled reasoning-model call can't hang the whole request
+    # long enough for the browser to give up with "Failed to fetch". If GPT-5.5
+    # doesn't return a usable brief within budget, the deterministic fallback
+    # brief in handlers/image.py takes over — image generation still completes.
+    return openrouter_chat(EDITORIAL_MODELS['gpt']['id'], msgs, ART_DIRECTOR_TEMPERATURE,
+                           ART_DIRECTOR_MAX_TOKENS, deadline_sec=30)
 
 
 # ── Stage 2a: brief validation + safe fallback ─────────────────────────────────

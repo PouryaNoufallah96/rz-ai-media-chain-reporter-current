@@ -599,7 +599,7 @@
           <div class="toggle-row" id="model-row-claude" onclick="toggleModel('claude')" style="cursor:pointer;border-color:rgba(217,119,6,.55);background:rgba(217,119,6,.08);">
             <div style="width:22px;height:22px;border-radius:6px;background:rgba(217,119,6,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:7px;font-weight:800;color:#d97706;">AN</div>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">Claude Opus 4.7 <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(217,119,6,.15);color:#d97706;margin-left:3px;">Anthropic</span></div>
+              <div style="font-size:12px;font-weight:600;color:#f0f2f8;">Claude Opus 4.8 <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(217,119,6,.15);color:#d97706;margin-left:3px;">Anthropic</span></div>
               <div style="font-size:10px;color:#7a8499;">Top reasoning benchmark score</div>
             </div>
             <div id="chk-model-claude" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:#d97706;display:flex;align-items:center;justify-content:center;">
@@ -795,7 +795,7 @@
 <script>
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:3001'
-  : `http://${window.location.hostname}:3001`;
+  : '';
 
 const MM_SOURCES = {
   'CoinDesk':'https://www.coindesk.com/arc/outboundfeeds/rss/',
@@ -2523,7 +2523,7 @@ function renderAllSections() {
 const EDITORIAL_MODEL_META = {
   gpt:      { display: 'GPT-5.5',          color: '#10a37f', badge: 'OpenAI',    desc: 'Best general-purpose editorial AI' },
   gemini:   { display: 'Gemini 3.1 Pro Preview',   color: '#4285f4', badge: 'Google',    desc: 'Strong reasoning · multimodal' },
-  claude:   { display: 'Claude Opus 4.7',  color: '#d97706', badge: 'Anthropic', desc: 'Top reasoning benchmark score' },
+  claude:   { display: 'Claude Opus 4.8',  color: '#d97706', badge: 'Anthropic', desc: 'Top reasoning benchmark score' },
   deepseek: { display: 'DeepSeek V4 Flash',color: '#22d3ee', badge: 'DeepSeek',  desc: 'Fast · cost-efficient · strong reasoning' },
 };
 

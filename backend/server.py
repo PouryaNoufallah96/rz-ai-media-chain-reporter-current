@@ -13,6 +13,7 @@ import gzip
 import sys
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -20,6 +21,7 @@ import auth
 import database
 from config import PORT, ORIGIN, COOKIE_SECURE, OPENROUTER_KEY, SCRIPT_URL
 from server_utils import _json_default
+from llm import OpenRouterVideoError
 
 # Handler functions — one import per domain module.
 from handlers.copy import handle_generate_copy
@@ -28,12 +30,27 @@ from handlers.editorial import (handle_editorial_select, handle_filter_pipeline,
                                 handle_deepseek_filter)
 from handlers.account import (build_account_summary, handle_log_action,
                               handle_log_keywords, handle_brand_keywords,
-                              handle_saved_discard, handle_saved_confirm_schedule)
+                              handle_saved_discard, handle_saved_update,
+                              handle_saved_confirm_schedule)
 from handlers.schedule import (handle_schedule_create, handle_schedule_list,
                                handle_schedule_cancel, handle_schedule_reschedule,
                                run_scheduler_loop)
 from handlers.social import handle_telegram_post, handle_twitter_post
 from handlers.sheets import handle_sheets
+from handlers.chat import (
+    chat_health_status,
+    handle_chat,
+    handle_chat_history,
+    run_chat_cleanup_loop,
+    start_chat_indexer,
+)
+from handlers.translation import handle_translate_cards
+from handlers.studio import (handle_studio_models, handle_studio_jobs,
+                             handle_studio_draft, handle_studio_script,
+                             handle_studio_direct,
+                             handle_studio_generate, handle_studio_poll,
+                             handle_studio_download)
+from telegram_public import DEFAULT_TELEGRAM_SOURCES, fetch_many_telegram_public_posts, rank_telegram_posts
 
 
 # ── HTTP Request Handler ───────────────────────────────────────────────────────
@@ -65,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/api/health':
-            self._json({'ok': True})
+            self._json({'ok': True, 'chat': chat_health_status()})
         elif self.path == '/api/auth/me':
             user = auth.get_current_user(self)
             if user is None:
@@ -95,6 +112,37 @@ class Handler(BaseHTTPRequestHandler):
             if user is None:
                 return self._error(401, 'Not authenticated')
             self._json(handle_schedule_list(user['id']))
+        elif self.path == '/api/studio/models':
+            user = auth.get_current_user(self)
+            if user is None:
+                return self._error(401, 'Not authenticated')
+            try:
+                self._json(handle_studio_models())
+            except Exception as e:
+                self._error(502, str(e))
+        elif self.path == '/api/studio/jobs':
+            user = auth.get_current_user(self)
+            if user is None:
+                return self._error(401, 'Not authenticated')
+            self._json(handle_studio_jobs(user['id']))
+        elif self.path.startswith('/api/studio/download'):
+            user = auth.get_current_user(self)
+            if user is None:
+                return self._error(401, 'Not authenticated')
+            params = parse_qs(urlparse(self.path).query)
+            try:
+                spec = handle_studio_download(user['id'], params.get('id', [''])[0])
+                spec['download'] = params.get('download', [''])[0] == '1'
+                self._file(spec)
+            except ValueError as e:
+                self._error(400, str(e))
+            except Exception as e:
+                self._error(502, str(e))
+        elif self.path.rstrip('/') == '/api/chat/history':
+            user = auth.get_current_user(self)
+            if user is None:
+                return self._error(401, 'Not authenticated')
+            self._json(handle_chat_history(user['id']))
         elif self.path.startswith('/api/rss'):
             from urllib.parse import urlparse, parse_qs, unquote
             params = parse_qs(urlparse(self.path).query)
@@ -118,6 +166,31 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
             except Exception as e:
                 self._error(502, f'RSS fetch failed: {e}')
+        elif self.path.startswith('/api/telegram/public-posts'):
+            from urllib.parse import urlparse, parse_qs
+            params = parse_qs(urlparse(self.path).query)
+            raw_channels = params.get('channels', [''])[0]
+            channels = [c.strip() for c in raw_channels.split(',') if c.strip()]
+            if not channels:
+                channels = list(DEFAULT_TELEGRAM_SOURCES.values())
+            try:
+                hours = int(params.get('hours', ['24'])[0])
+            except (TypeError, ValueError):
+                hours = 24
+            try:
+                limit = int(params.get('limit', ['20'])[0])
+            except (TypeError, ValueError):
+                limit = 20
+            try:
+                self._json(fetch_many_telegram_public_posts(
+                    channels,
+                    hours=hours,
+                    limit_per_channel=max(1, min(limit, 50)),
+                ))
+            except Exception as e:
+                self._error(502, f'Telegram fetch failed: {e}')
+        elif self.path == '/api/telegram/sources':
+            self._json({'sources': DEFAULT_TELEGRAM_SOURCES})
         else:
             self._error(404, 'Not found')
 
@@ -174,6 +247,11 @@ class Handler(BaseHTTPRequestHandler):
                 if user is None:
                     return self._error(401, 'Not authenticated')
                 self._json(handle_saved_discard(user['id'], body))
+            elif path == '/api/account/saved/update':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                self._json(handle_saved_update(user['id'], body))
             elif path == '/api/account/saved/confirm-schedule':
                 user = auth.get_current_user(self)
                 if user is None:
@@ -194,6 +272,31 @@ class Handler(BaseHTTPRequestHandler):
                 if user is None:
                     return self._error(401, 'Not authenticated')
                 self._json(handle_schedule_reschedule(user['id'], body))
+            elif path == '/api/studio/draft':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                self._json(handle_studio_draft(user['id'], body))
+            elif path == '/api/studio/script':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                self._json(handle_studio_script(user['id'], body))
+            elif path == '/api/studio/direct':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                self._json(handle_studio_direct(user['id'], body))
+            elif path == '/api/studio/generate':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                self._json(handle_studio_generate(user['id'], body))
+            elif path == '/api/studio/poll':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                self._json(handle_studio_poll(user['id'], body))
             elif path == '/api/copy/generate':
                 self._json(handle_generate_copy(body))
             elif path == '/api/promo/generate-ideas':
@@ -230,8 +333,25 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(handle_deepseek_filter(body))
             elif path == '/api/telegram/post':
                 self._json(handle_telegram_post(body))
+            elif path == '/api/telegram/rank':
+                self._json(rank_telegram_posts(body))
+            elif path == '/api/translate/cards':
+                self._json(handle_translate_cards(body))
+            elif path == '/api/chat':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                self._json(handle_chat(user['id'], body))
+            elif path == '/api/chat/clear':
+                user = auth.get_current_user(self)
+                if user is None:
+                    return self._error(401, 'Not authenticated')
+                database.clear_chat(user['id'])
+                self._json({'ok': True})
             else:
                 self._error(404, f'Unknown route: {path}')
+        except OpenRouterVideoError as e:
+            self._error(502, str(e))
         except ValueError as e:
             self._error(400, str(e))
         except requests.HTTPError as e:
@@ -262,6 +382,53 @@ class Handler(BaseHTTPRequestHandler):
     def _error(self, code, msg):
         self._json({'error': msg}, code)
 
+    def _file(self, spec):
+        path = spec['path']
+        total = path.stat().st_size
+        start, end = 0, total - 1
+        status = 200
+        range_header = self.headers.get('Range', '')
+        if range_header.startswith('bytes='):
+            try:
+                raw_start, raw_end = range_header[6:].split('-', 1)
+                if raw_start:
+                    start = int(raw_start)
+                if raw_end:
+                    end = min(int(raw_end), total - 1)
+                if start < 0 or start > end or start >= total:
+                    raise ValueError
+                status = 206
+            except (TypeError, ValueError):
+                self.send_response(416)
+                self.send_cors()
+                self.send_header('Content-Range', f'bytes */{total}')
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+        length = end - start + 1
+        self.send_response(status)
+        self.send_cors()
+        self.send_header('Content-Type', spec.get('contentType', 'application/octet-stream'))
+        self.send_header('Accept-Ranges', 'bytes')
+        disposition = 'attachment' if spec.get('download') else 'inline'
+        self.send_header('Content-Disposition', f'{disposition}; filename="{spec.get("filename", path.name)}"')
+        if status == 206:
+            self.send_header('Content-Range', f'bytes {start}-{end}/{total}')
+        self.send_header('Content-Length', str(length))
+        self.end_headers()
+        with path.open('rb') as source:
+            source.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = source.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                try:
+                    self.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    return
+                remaining -= len(chunk)
+
     def _stream_ndjson_start(self):
         self.send_response(200)
         self.send_cors()
@@ -289,6 +456,8 @@ if __name__ == '__main__':
         print('[WARN] GOOGLE_APPS_SCRIPT_URL not set — Sheets routes will fail', file=sys.stderr)
 
     threading.Thread(target=run_scheduler_loop, daemon=True).start()
+    threading.Thread(target=run_chat_cleanup_loop, daemon=True).start()
+    start_chat_indexer()
 
     server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     server.daemon_threads = True

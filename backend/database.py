@@ -14,12 +14,14 @@ from pathlib import Path
 DB_PATH = Path(__file__).parent / 'data' / 'app.db'
 
 SESSION_TTL_DAYS = 30
+CHAT_INACTIVITY_MINUTES = 60
 
 
 def _connect():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA busy_timeout = 5000')
     return conn
 
 
@@ -133,6 +135,60 @@ def init_db():
         ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_posts_due ON scheduled_posts (status, scheduled_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_posts_user ON scheduled_posts (user_id, created_at)')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                metadata_json TEXT,
+                created_at TEXT NOT NULL
+            )
+        ''')
+        chat_message_columns = {
+            row['name']
+            for row in conn.execute('PRAGMA table_info(chat_messages)').fetchall()
+        }
+        if 'metadata_json' not in chat_message_columns:
+            conn.execute('ALTER TABLE chat_messages ADD COLUMN metadata_json TEXT')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_user_time ON chat_messages (user_id, created_at)')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS studio_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                title TEXT NOT NULL,
+                brand TEXT NOT NULL,
+                source_cards TEXT NOT NULL,
+                script_json TEXT NOT NULL,
+                settings_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_studio_drafts_user_time ON studio_drafts (user_id, updated_at)')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS studio_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                draft_id INTEGER REFERENCES studio_drafts(id),
+                openrouter_job_id TEXT NOT NULL,
+                polling_url TEXT,
+                model TEXT NOT NULL,
+                status TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                settings_json TEXT NOT NULL,
+                result_url TEXT,
+                content_path TEXT,
+                usage_json TEXT,
+                cost REAL,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_studio_jobs_user_time ON studio_jobs (user_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_studio_jobs_provider ON studio_jobs (openrouter_job_id)')
         conn.commit()
     finally:
         conn.close()
@@ -421,6 +477,38 @@ def update_saved_card_status(saved_id, user_id, status):
         conn.close()
 
 
+def update_saved_card(saved_id, user_id, data):
+    fields = {
+        'brand': data.get('media') or data.get('brand'),
+        'platform': data.get('platform'),
+        'model_display': data.get('modelDisplay'),
+        'model_color': data.get('modelColor'),
+        'headline': data.get('headline'),
+        'copy': data.get('copy'),
+        'hashtags': json.dumps(data.get('hashtags', [])) if 'hashtags' in data else None,
+        'variants': json.dumps(data.get('variants', [])) if 'variants' in data else None,
+    }
+    updates = [(k, v) for k, v in fields.items() if v is not None]
+    if not updates:
+        return get_saved_card(saved_id, user_id)
+
+    conn = _connect()
+    try:
+        set_clause = ', '.join(f'{k} = ?' for k, _ in updates)
+        values = [v for _, v in updates] + [saved_id, user_id]
+        cur = conn.execute(
+            f'UPDATE saved_cards SET {set_clause} WHERE id = ? AND user_id = ?',
+            values,
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            return None
+        row = conn.execute('SELECT * FROM saved_cards WHERE id = ? AND user_id = ?', (saved_id, user_id)).fetchone()
+        return _saved_card_to_dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def get_saved_card(saved_id, user_id):
     conn = _connect()
     try:
@@ -530,5 +618,341 @@ def reschedule_scheduled_post(post_id, user_id, scheduled_at):
         )
         conn.commit()
         return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+# ── Chat assistant persistence ────────────────────────────────────────────────
+
+def add_chat_message(user_id, role, content):
+    """role: 'user' or 'assistant'."""
+    conn = _connect()
+    try:
+        created_at = _now_iso()
+        conn.execute(
+            'INSERT INTO chat_messages (user_id, role, content, created_at) VALUES (?, ?, ?, ?)',
+            (user_id, role, content, created_at)
+        )
+        conn.commit()
+        return created_at
+    finally:
+        conn.close()
+
+
+def add_chat_turn(user_id, user_content, assistant_content, assistant_metadata=None):
+    """Persist a complete chat turn in one transaction and return its expiry."""
+    conn = _connect()
+    try:
+        user_created_at = _now_iso()
+        assistant_created_at = _now_iso()
+        conn.executemany(
+            'INSERT INTO chat_messages '
+            '(user_id, role, content, metadata_json, created_at) VALUES (?, ?, ?, ?, ?)',
+            (
+                (user_id, 'user', user_content, None, user_created_at),
+                (
+                    user_id, 'assistant', assistant_content,
+                    json.dumps(assistant_metadata, ensure_ascii=False)
+                    if assistant_metadata else None,
+                    assistant_created_at,
+                ),
+            ),
+        )
+        conn.commit()
+        expires_at = _chat_expiry(assistant_created_at)
+        return {
+            'lastMessageAt': assistant_created_at,
+            'expiresAt': expires_at.isoformat() if expires_at else None,
+        }
+    finally:
+        conn.close()
+
+
+def _chat_expiry(last_message_at, inactivity_minutes=CHAT_INACTIVITY_MINUTES):
+    if not last_message_at:
+        return None
+    last_message = datetime.fromisoformat(last_message_at)
+    if last_message.tzinfo is None:
+        last_message = last_message.replace(tzinfo=timezone.utc)
+    return last_message.astimezone(timezone.utc) + timedelta(minutes=inactivity_minutes)
+
+
+def get_chat_state(user_id, limit=15, inactivity_minutes=CHAT_INACTIVITY_MINUTES):
+    """Return recent messages and delete the conversation after inactivity."""
+    conn = _connect()
+    try:
+        latest = conn.execute(
+            'SELECT MAX(created_at) AS last_message_at FROM chat_messages WHERE user_id = ?',
+            (user_id,)
+        ).fetchone()
+        last_message_at = latest['last_message_at'] if latest else None
+        expires_at = _chat_expiry(last_message_at, inactivity_minutes)
+
+        if expires_at and datetime.now(timezone.utc) >= expires_at:
+            conn.execute('DELETE FROM chat_messages WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return {'messages': [], 'lastMessageAt': None, 'expiresAt': None}
+
+        rows = conn.execute(
+            'SELECT role, content, metadata_json, created_at '
+            'FROM chat_messages WHERE user_id = ? '
+            'ORDER BY created_at DESC, id DESC LIMIT ?',
+            (user_id, limit)
+        ).fetchall()
+        messages = []
+        for row in reversed(rows):
+            message = {
+                'role': row['role'],
+                'content': row['content'],
+                'createdAt': row['created_at'],
+            }
+            if row['metadata_json']:
+                try:
+                    metadata = json.loads(row['metadata_json'])
+                    if isinstance(metadata, dict):
+                        message.update(metadata)
+                except (TypeError, ValueError):
+                    pass
+            messages.append(message)
+        return {
+            'messages': messages,
+            'lastMessageAt': last_message_at,
+            'expiresAt': expires_at.isoformat() if expires_at else None,
+        }
+    finally:
+        conn.close()
+
+
+def get_recent_chat(user_id, limit=15):
+    """Most recent turns, oldest-first (so they read in order into the API).
+    Returns list of {'role','content'}."""
+    state = get_chat_state(user_id, limit=limit)
+    return [{'role': message['role'], 'content': message['content']} for message in state['messages']]
+
+
+def clear_expired_chats(inactivity_minutes=CHAT_INACTIVITY_MINUTES):
+    """Delete inactive conversations for all users; returns deleted row count."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=inactivity_minutes)).isoformat()
+    conn = _connect()
+    try:
+        cursor = conn.execute(
+            '''
+            DELETE FROM chat_messages
+            WHERE user_id IN (
+                SELECT user_id
+                FROM chat_messages
+                GROUP BY user_id
+                HAVING MAX(created_at) <= ?
+            )
+            ''',
+            (cutoff,)
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
+def clear_chat(user_id):
+    conn = _connect()
+    try:
+        conn.execute('DELETE FROM chat_messages WHERE user_id = ?', (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# Studio reel persistence
+
+def _json_value(value, fallback):
+    try:
+        return json.loads(value or '')
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return fallback
+
+
+def _studio_draft_to_dict(row):
+    if not row:
+        return None
+    return {
+        'id': row['id'],
+        'title': row['title'],
+        'brand': row['brand'],
+        'cards': _json_value(row['source_cards'], []),
+        'script': _json_value(row['script_json'], {}),
+        'settings': _json_value(row['settings_json'], {}),
+        'createdAt': row['created_at'],
+        'updatedAt': row['updated_at'],
+    }
+
+
+def save_studio_draft(user_id, data, draft_id=None):
+    now = _now_iso()
+    title = data.get('title') or 'Untitled reel'
+    brand = data.get('brand') or 'Mixed'
+    cards = json.dumps(data.get('cards') or [], ensure_ascii=False)
+    script = json.dumps(data.get('script') or {}, ensure_ascii=False)
+    settings = json.dumps(data.get('settings') or {}, ensure_ascii=False)
+    conn = _connect()
+    try:
+        if draft_id is not None:
+            cur = conn.execute(
+                'UPDATE studio_drafts SET title = ?, brand = ?, source_cards = ?, script_json = ?, '
+                'settings_json = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+                (title, brand, cards, script, settings, now, draft_id, user_id),
+            )
+            if cur.rowcount == 0:
+                exists = conn.execute('SELECT user_id FROM studio_drafts WHERE id = ?', (draft_id,)).fetchone()
+                if exists:
+                    raise ValueError('Studio draft not found')
+                draft_id = None
+        if draft_id is None:
+            cur = conn.execute(
+                'INSERT INTO studio_drafts (user_id, title, brand, source_cards, script_json, '
+                'settings_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                (user_id, title, brand, cards, script, settings, now, now),
+            )
+            draft_id = cur.lastrowid
+        conn.commit()
+        row = conn.execute(
+            'SELECT * FROM studio_drafts WHERE id = ? AND user_id = ?',
+            (draft_id, user_id),
+        ).fetchone()
+        return _studio_draft_to_dict(row)
+    finally:
+        conn.close()
+
+
+def get_studio_draft(draft_id, user_id):
+    conn = _connect()
+    try:
+        row = conn.execute(
+            'SELECT * FROM studio_drafts WHERE id = ? AND user_id = ?',
+            (draft_id, user_id),
+        ).fetchone()
+        return _studio_draft_to_dict(row)
+    finally:
+        conn.close()
+
+
+def _studio_job_to_dict(row):
+    if not row:
+        return None
+    return {
+        'id': row['id'],
+        'draftId': row['draft_id'],
+        'openrouterJobId': row['openrouter_job_id'],
+        'pollingUrl': row['polling_url'] or '',
+        'model': row['model'],
+        'status': row['status'],
+        'prompt': row['prompt'],
+        'settings': _json_value(row['settings_json'], {}),
+        'resultUrl': row['result_url'] or '',
+        'hasLocalVideo': bool(row['content_path']),
+        'usage': _json_value(row['usage_json'], {}),
+        'cost': row['cost'],
+        'error': row['error'] or '',
+        'createdAt': row['created_at'],
+        'updatedAt': row['updated_at'],
+        'completedAt': row['completed_at'],
+    }
+
+
+def create_studio_job(user_id, data):
+    now = _now_iso()
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            'INSERT INTO studio_jobs (user_id, draft_id, openrouter_job_id, polling_url, model, status, '
+            'prompt, settings_json, result_url, content_path, usage_json, cost, error, created_at, updated_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (
+                user_id, data.get('draftId'), data['openrouterJobId'], data.get('pollingUrl', ''),
+                data['model'], data.get('status', 'pending'), data['prompt'],
+                json.dumps(data.get('settings') or {}, ensure_ascii=False), data.get('resultUrl', ''),
+                data.get('contentPath', ''), json.dumps(data.get('usage') or {}, ensure_ascii=False),
+                data.get('cost'), data.get('error', ''), now, now,
+            ),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM studio_jobs WHERE id = ?', (cur.lastrowid,)).fetchone()
+        return _studio_job_to_dict(row)
+    finally:
+        conn.close()
+
+
+def get_studio_job(job_id, user_id):
+    conn = _connect()
+    try:
+        row = conn.execute(
+            'SELECT * FROM studio_jobs WHERE id = ? AND user_id = ?',
+            (job_id, user_id),
+        ).fetchone()
+        return _studio_job_to_dict(row)
+    finally:
+        conn.close()
+
+
+def get_studio_job_record(job_id, user_id):
+    """Internal job shape including the server-only content path."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            'SELECT * FROM studio_jobs WHERE id = ? AND user_id = ?',
+            (job_id, user_id),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_studio_jobs(user_id, limit=30):
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            'SELECT * FROM studio_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+            (user_id, limit),
+        ).fetchall()
+        return [_studio_job_to_dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def update_studio_job(job_id, user_id, patch):
+    columns = {
+        'status': 'status',
+        'pollingUrl': 'polling_url',
+        'resultUrl': 'result_url',
+        'contentPath': 'content_path',
+        'cost': 'cost',
+        'error': 'error',
+        'completedAt': 'completed_at',
+    }
+    updates = []
+    values = []
+    for key, column in columns.items():
+        if key in patch:
+            updates.append(f'{column} = ?')
+            values.append(patch[key])
+    if 'usage' in patch:
+        updates.append('usage_json = ?')
+        values.append(json.dumps(patch.get('usage') or {}, ensure_ascii=False))
+    updates.append('updated_at = ?')
+    values.append(_now_iso())
+    values.extend([job_id, user_id])
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            f'UPDATE studio_jobs SET {", ".join(updates)} WHERE id = ? AND user_id = ?',
+            values,
+        )
+        if cur.rowcount == 0:
+            return None
+        conn.commit()
+        row = conn.execute(
+            'SELECT * FROM studio_jobs WHERE id = ? AND user_id = ?',
+            (job_id, user_id),
+        ).fetchone()
+        return _studio_job_to_dict(row)
     finally:
         conn.close()

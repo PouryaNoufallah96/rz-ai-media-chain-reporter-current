@@ -22,12 +22,6 @@ BRAND_IMAGE_PROFILES = {
         'passthrough_fields':     ['read'],
         'brief_prefix_schema':    {'read': 'CONTRAST | NUMBER | PROCESS | THREAT | LAUNCH | EDUCATION'},
         'brand_keywords': ['rz prime', 'rzprime'],
-        'logo_line': (
-            "In the bottom-left corner of the frame, include the RZ Prime wordmark: "
-            "'RZ' in heavy bold above 'Prime' in light weight, both white and small. "
-            "A small green 'RZ' coin icon may appear beside it. "
-            "This is the ONLY brand logo permitted in the frame."
-        ),
         'wolf_descriptions': {
             'none':    'no mascot characters in the scene (default when the layout is already visually complex)',
             'kid':     ('the Blue Kid mascot stands in the scene -- a round-faced child character with electric-blue '
@@ -676,7 +670,6 @@ F. Article: "What happens at the final reveal?"
         'data_element_template': 'a glowing panel or glass surface displaying "{value}"{label_part}',
         'data_element_label_template': ' labeled "{label}"',
         'legibility_line': "All text is large, bold, crisp and clearly legible.",
-        'logo_line': "A small MCG shield emblem in white or teal sits in the bottom-left corner of the frame.",
         'anti_repetition_rules': (
             "Hard rules: do not repeat the same family more than 2 times in a row; do not use "
             "'threat_vs_guard' more than 2 times in any 4 consecutive posts; do not use the "

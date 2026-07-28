@@ -35,6 +35,11 @@ TELEGRAM_PROXY   = os.environ.get('TELEGRAM_PROXY', '')   # e.g. http://127.0.0.
 DRIVE_FOLDER_URL = os.environ.get('GOOGLE_DRIVE_FOLDER_URL', '')
 
 OPENROUTER_URL  = 'https://openrouter.ai/api/v1/chat/completions'
+STUDIO_SCRIPT_MODEL = os.environ.get('STUDIO_SCRIPT_MODEL') or 'openai/gpt-5.5'
+STUDIO_FFMPEG_PATH = os.environ.get('STUDIO_FFMPEG_PATH', 'ffmpeg')
+STUDIO_OUTPUT_DIR = Path(
+    os.environ.get('STUDIO_OUTPUT_DIR') or str(Path(__file__).parent / 'data' / 'studio')
+)
 
 # ── Editorial AI models (all routed through OpenRouter) ───────────────────────
 EDITORIAL_MODELS = {
@@ -53,8 +58,8 @@ EDITORIAL_MODELS = {
         'api':         'openrouter',
     },
     'claude': {
-        'id':          'anthropic/claude-opus-4-7',
-        'display':     'Claude Opus 4.7',
+        'id':          'anthropic/claude-opus-4.8',
+        'display':     'Claude Opus 4.8',
         'temperature': 0.30,
         'max_tokens':  8000,
         'api':         'openrouter',
@@ -66,6 +71,18 @@ EDITORIAL_MODELS = {
         'max_tokens':  16000,
         'api':         'openrouter',
     },
+}
+
+# ── Chat assistant model (cheap + fast, for the in-app chatbot) ────────────────
+# Routed through OpenRouter like everything else. Swap the id here if you'd rather
+# use a different cheap-fast model (e.g. 'google/gemini-2.0-flash',
+# 'deepseek/deepseek-v4-flash'). Free models on OpenRouter use the ':free' suffix.
+CHAT_MODEL = {
+    'id':          'openai/gpt-5.4-mini',
+    'display':     'GPT-5.4 mini',
+    'temperature': 0.4,
+    'max_tokens':  1200,
+    'api':         'openrouter',
 }
 
 # ── Platform rules ─────────────────────────────────────────────────────────────
@@ -88,13 +105,14 @@ PLAT_RULES = {
         'system': lambda brand, sent, sibling_copy=None: (
             f'You are the senior social media editor for {brand}, a premium crypto news brand, known for scroll-stopping one-liners. Sentiment: {sent}.\n'
             'PERSONA: sharp, fast, opinionated-but-factual — the post a trader screenshots before reading the full article.\n'
-            'STRUCTURE: one scroll-stopping unit — a hook line that states the news, optionally one short line of context/stakes, then 2-3 hashtags that matter for reach (ticker/topic tags, not generic ones).\n'
+            'STRUCTURE: one scroll-stopping unit — a hook line that states the news, optionally one short line of context/stakes.\n'
+            'HARD RULE: the "copy" field must be PURE PROSE with ZERO hashtags in it. Put your 2-3 hashtags (ticker/topic tags, not generic ones) ONLY in the separate "hashtags" array — they are appended to the post automatically.\n'
             'HARD RULE: response must be ≤ 280 characters total including spaces and hashtags.\n'
             'EMOJI POLICY: none — zero emojis on X, ever.\n'
             f'{_FACT_RULE}\n'
-            'EXAMPLES OF THE VOICE (do not reuse content, only mirror tone/structure):\n'
-            '- "BlackRock just filed for a spot Solana ETF. The Bitcoin ETF playbook is repeating — and this time the SEC clock is already ticking. #Solana #ETF"\n'
-            '- "Binance freezes $80M in wallets linked to a North Korean laundering ring. Compliance teams everywhere just got a new case study. #Binance #Crypto"\n'
+            'EXAMPLES OF THE VOICE (do not reuse content, only mirror tone/structure). Note: copy has NO hashtags — they live in the array:\n'
+            '- { "copy": "BlackRock just filed for a spot Solana ETF. The Bitcoin ETF playbook is repeating — and this time the SEC clock is already ticking.", "hashtags": ["#Solana","#ETF"] }\n'
+            '- { "copy": "Binance freezes $80M in wallets linked to a North Korean laundering ring. Compliance teams everywhere just got a new case study.", "hashtags": ["#Binance","#Crypto"] }\n'
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1","#Tag2"] }'
             + _sibling_block(sibling_copy, 'X')
         ),
@@ -109,13 +127,13 @@ PLAT_RULES = {
         'emoji_policy': 'sparing, structural — e.g. 📌 for bullet markers, 🚨 only for genuinely breaking news',
         'system': lambda brand, sent, sibling_copy=None: (
             f'You are the Telegram channel editor for {brand}, writing for an audience that wants the full story without leaving the app. Sentiment: {sent}.\n'
-            'STRUCTURE: a bold headline line, then a short body that covers what happened and why it matters, then 3-5 hashtags at the end.\n'
+            'STRUCTURE: a bold headline line, then a short body that covers what happened and why it matters.\n'
+            'HARD RULE: the "copy" field must be PURE PROSE with ZERO hashtags in it. Put your 3-5 hashtags ONLY in the separate "hashtags" array — they are appended to the post automatically.\n'
             'HARD RULE: response must be 300-600 characters total, including spaces, line breaks, emoji and hashtags.\n'
             'HARD RULE: do NOT include any "Source:", "Subject:", "Flag:", "Caveat:" or any "📌 Label: value" labeled bullets — no attribution lines of any kind.\n'
             'EMOJI POLICY: sparing and structural — 📌 for bullets only if the angle calls for it, 🚨 only for breaking news, nothing decorative.\n'
             f'Suggested topic→emoji anchors (use only if relevant, never force them): {_EMOJI_HINT}.\n'
             f'{_FACT_RULE}\n'
-            'End with 3-5 hashtags on the last line.\n'
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1"] }'
             + _sibling_block(sibling_copy, 'X')
         ),
@@ -131,12 +149,13 @@ PLAT_RULES = {
         'system': lambda brand, sent, sibling_copy=None: (
             f'You are the Instagram editor for {brand}, writing captions for a visual-first, scroll-fast audience. Sentiment: {sent}.\n'
             'PERSONA: energetic storyteller — makes a market headline feel like a moment worth stopping for.\n'
-            'STRUCTURE: a strong opening hook line, a short storytelling body that builds context and stakes, a clear closing CTA (e.g. "Tap in for the full breakdown" / "Where do you stand?"), then a block of 5-10 discovery hashtags.\n'
+            'STRUCTURE: a strong opening hook line, a short storytelling body that builds context and stakes, a clear closing CTA (e.g. "Tap in for the full breakdown" / "Where do you stand?").\n'
+            'HARD RULE: the "copy" field must be PURE PROSE with ZERO hashtags in it. Put your 5-10 discovery hashtags ONLY in the separate "hashtags" array — they are appended to the caption automatically.\n'
             'EMOJI POLICY: liberal but purposeful — pick emojis that semantically match the topic, never spam the same emoji repeatedly.\n'
             f'Suggested topic→emoji anchors (use only if relevant): {_EMOJI_HINT}.\n'
             f'{_FACT_RULE}\n'
-            'EXAMPLE OF THE VOICE (do not reuse content, only mirror tone/structure):\n'
-            '"Ethereum just flipped a 3-year resistance level into support 📈\\n\\nWhile most were watching Bitcoin, ETH quietly built the kind of base that precedes real moves — and on-chain data shows whales are accumulating again.\\n\\nIs this the setup before the next leg up, or another fakeout? Drop your call below 👇\\n\\n#Ethereum #ETH #CryptoMarkets #Web3 #OnChainData #BullMarket #DeFi"\n'
+            'EXAMPLE OF THE VOICE (do not reuse content, only mirror tone/structure). Note: copy has NO hashtags — they live in the array:\n'
+            '{ "copy": "Ethereum just flipped a 3-year resistance level into support 📈\\n\\nWhile most were watching Bitcoin, ETH quietly built the kind of base that precedes real moves — and on-chain data shows whales are accumulating again.\\n\\nIs this the setup before the next leg up, or another fakeout? Drop your call below 👇", "hashtags": ["#Ethereum","#ETH","#CryptoMarkets","#Web3","#OnChainData","#BullMarket","#DeFi"] }\n'
             'Respond with JSON: { "copy": "...", "hashtags": ["#Tag1"] }'
             + _sibling_block(sibling_copy, 'X')
         ),
@@ -174,6 +193,46 @@ def smart_truncate(text, limit=280):
     cut = text[:limit - 1].rsplit(' ', 1)[0]
     return cut.rstrip(' .,;:–—-') + '…'
 
+
+# ── Hashtag cleanup: copy body must be pure prose, tags live only in the array ─
+_HASHTAG_RE = re.compile(r'#[\w]+(?:[/_-][\w]+)*')
+# A trailing run of hashtags is often glued to the copy with a label/separator
+# the model invents ("Topics:", "Tags:", "·", "—", "|"). Strip that too so the
+# body ends on a clean sentence, not a dangling "Topics:".
+_TRAILING_GLUE_RE = re.compile(
+    r'\s*[·\-—|:]?\s*(?:Topics?|Tags?|Hashtags?)?\s*[:\-—]?\s*$',
+    re.IGNORECASE,
+)
+
+
+def strip_hashtags_from_copy(copy, hashtags=None):
+    """Return (clean_copy, merged_hashtags).
+
+    The `copy` body must NEVER contain hashtags — they belong only in the
+    separate `hashtags` array (which the post handler appends as its own block).
+    Models routinely fold tags into the body anyway, so this is the single source
+    of truth that enforces the contract. Any hashtags found in the body are
+    extracted, de-duplicated (case-insensitive), and appended to the array in
+    their original order of appearance — so nothing the model wrote is lost.
+    """
+    if not copy:
+        return copy, list(hashtags or [])
+    body_tags = _HASHTAG_RE.findall(copy)
+    clean = _HASHTAG_RE.sub('', copy)
+    # Collapse the double-spaces / dangling separators left behind, and trim.
+    clean = re.sub(r'[ \t]{2,}', ' ', clean)
+    clean = re.sub(r'\s*\n\s*', '\n', clean)
+    clean = _TRAILING_GLUE_RE.sub('', clean).strip(' \t\n·—-|:')
+    # Merge body tags into the array (existing array first, then new ones),
+    # dedup case-insensitive so a tag can't appear twice.
+    merged = list(hashtags or [])
+    seen = {t.lower() for t in merged}
+    for t in body_tags:
+        if t.lower() not in seen:
+            merged.append(t)
+            seen.add(t.lower())
+    return clean, merged
+
 # ── Brand visual tones for image generation ─────────────────────────────────
 BRAND_VISUAL_TONE = {
     'RZ Prime':        'sleek dark-mode financial newsroom, deep blue and gold palette, cinematic editorial',
@@ -189,6 +248,37 @@ BRAND_HASHTAGS = {
     'Meta Coin Guard': '#MetaCoinGuard',
     'ChainReporter':   '#ChainReporter',
 }
+
+# Case- and space-insensitive index of BRAND_HASHTAGS, so a frontend value like
+# "Chain Reporter" (two words) still resolves to the #ChainReporter tag whose key
+# is one word. Built once at import.
+_BRAND_TAG_INDEX = {k.replace(' ', '').lower(): v for k, v in BRAND_HASHTAGS.items()}
+
+
+def brand_tag_for(media):
+    """Canonical identity hashtag for a brand value, or None if unknown.
+
+    Tolerant to spacing/case: 'Chain Reporter', 'chainreporter', 'ChainReporter'
+    all map to '#ChainReporter'. Shared by copy generation and the post handlers
+    so both layers agree on the media-name hashtag.
+    """
+    if not media:
+        return None
+    return _BRAND_TAG_INDEX.get(str(media).replace(' ', '').lower())
+
+
+def prepend_brand_tag(hashtags, media):
+    """Force the brand identity hashtag to position 0, de-duplicating any copy.
+
+    Used at both generation time (copy.py) and post time (social.py) as
+    defence-in-depth: a stale/empty hashtags array or a brand-name spelling
+    mismatch can never drop the media-name tag.
+    """
+    brand_tag = brand_tag_for(media)
+    if not brand_tag:
+        return list(hashtags or [])
+    others = [t for t in (hashtags or []) if str(t).lower() != brand_tag.lower()]
+    return [brand_tag] + others
 
 # ── Promotional copy: per-brand product pitch injected when promoMode=True ────
 BRAND_PROMO_PITCH = {
@@ -208,6 +298,14 @@ BRAND_PROMO_PITCH = {
         "if your tokens lose value — non-custodial, no KYC, no claims process, no intermediary. "
         "Built for large holders, funds, and treasury managers."
     ),
+    'ChainReporter': (
+        "ChainReporter is a crypto news media outlet covering the full spectrum of the digital-asset "
+        "beat — market moves, hacks and security incidents, regulation and enforcement, launches and "
+        "listings, governance and protocol mechanics, and person-centric stories — published across ten "
+        "rotating editorial visual formats rather than a single house style. It exists to give readers "
+        "fast, credible, full-spectrum coverage with editorial-grade craft, distinctive visual treatments, "
+        "and zero hype or price-promise language."
+    ),
 }
 
 # ── OpenRouter image generation model modalities ──────────────────────────────
@@ -219,8 +317,12 @@ OPENROUTER_IMAGE_MODELS = {
 }
 
 # ── Art Director tunables (used by image_pipeline) ────────────────────────────
+# Note: reasoning models (GPT-5.x, DeepSeek, Gemini Flash) spend tokens on
+# internal "thinking"; if the budget is too small they burn it all on reasoning
+# and emit ZERO visible content (finish_reason=length), which is the error that
+# surfaces in the UI as "Image generation failed". 4000 leaves comfortable room.
 ART_DIRECTOR_TEMPERATURE = 0.95
-ART_DIRECTOR_MAX_TOKENS = 900
+ART_DIRECTOR_MAX_TOKENS = 4000
 
 _CORE_AXES = ('environment', 'camera', 'energy', 'mood_accent')
 

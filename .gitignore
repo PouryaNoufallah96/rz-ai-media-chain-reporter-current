@@ -4,6 +4,7 @@ backend/data/
 *.pyc
 *.pkl
 node_modules/
+.pnpm-store/
 temporary screenshots/
 .DS_Store
 CLAUDE*.md
@@ -16,3 +17,4 @@ backend/*.pid
 
 # Local tooling
 .claude/
+.deploy_chainreporter_vps_key

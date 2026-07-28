@@ -1,0 +1,33 @@
+[Unit]
+Description=Private EmbeddingGemma service for ChainReporter chat
+After=network.target
+Before=chainreporter-backend.service
+
+[Service]
+Type=simple
+User=embeddinggemma
+Group=embeddinggemma
+WorkingDirectory=/opt/embeddinggemma
+Environment=LD_LIBRARY_PATH=/opt/embeddinggemma/lib
+ExecStart=/opt/embeddinggemma/bin/llama-server \
+  --model /opt/embeddinggemma/models/embeddinggemma-300M-qat-Q4_0.gguf \
+  --embedding \
+  --host 127.0.0.1 \
+  --port 8081 \
+  --threads 2 \
+  --ctx-size 2048 \
+  --batch-size 1024 \
+  --ubatch-size 1024
+Restart=on-failure
+RestartSec=3
+Nice=10
+MemoryMax=1G
+CPUQuota=150%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/embeddinggemma
+
+[Install]
+WantedBy=multi-user.target
