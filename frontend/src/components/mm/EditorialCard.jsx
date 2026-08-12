@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useMmStore, API_BASE, MEDIA_COLORS, PLAT_COLORS, PLAT_LIST } from '../../store/mmStore'
 import { useLanguageStore } from '../../store/languageStore'
 import { routeCardToPlatform } from '../../utils/routeCardToPlatform'
-import { useStudioStore } from '../../store/studioStore'
 
 const STATUS_BADGE = {
   ready:     <span className="sbadge sb-ready"     style={{fontSize:8.5}}>● Ready</span>,
@@ -26,8 +25,6 @@ export default function EditorialCard({ card, onDragStart }) {
   const promoMode = useMmStore(s => s.promoMode)
   const updateSourceCard = useMmStore(s => s.updateSourceCard)
   const language = useLanguageStore(s => s.language)
-  const addStudioCards = useStudioStore(s => s.addCards)
-  const inStudio = useStudioStore(s => s.importedCards.some(item => item.id === card.id && item.media === card.media))
 
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [translating, setTranslating] = useState(false)
@@ -111,15 +108,6 @@ export default function EditorialCard({ card, onDragStart }) {
     >
       <button className="qs-btn" title="Quick send to platform"
         onClick={e => { e.stopPropagation(); setPopoverOpen(o => !o) }}>⋯</button>
-      <button className={`studio-send-btn${inStudio ? ' sent' : ''}`} title={inStudio ? 'Already in Studio' : 'Send to Studio'} aria-label={inStudio ? 'Already in Studio' : 'Send to Studio'}
-        onClick={e => { e.stopPropagation(); addStudioCards(card) }}>
-        {inStudio ? (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6"/></svg>
-        ) : (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 10 4.6-2.3a1 1 0 0 1 1.4.9v6.8a1 1 0 0 1-1.4.9L15 14M4 6h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/></svg>
-        )}
-      </button>
-
       {popoverOpen && (
         <div className="qs-popover" onClick={e => e.stopPropagation()}>
           <span className="qs-label">Send to</span>
@@ -133,11 +121,6 @@ export default function EditorialCard({ card, onDragStart }) {
               </button>
             )
           })}
-          <button className={`qs-plat-btn${inStudio ? ' routed' : ''}`}
-            onClick={() => { addStudioCards(card); setPopoverOpen(false) }}>
-            <span>Studio</span>
-            {inStudio && <span>✓</span>}
-          </button>
         </div>
       )}
 

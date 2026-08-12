@@ -138,7 +138,7 @@ _UNSUPPORTED_RULES = (
     ),
     (
         'unsupported_output',
-        re.compile(r"\bstudio\b|\b(?:export|download|create|generate)\b.*\b(?:pdf|powerpoint|ppt|excel file|video|reel|audio|music)\b|"
+        re.compile(r"\b(?:export|download|create|generate)\b.*\b(?:pdf|powerpoint|ppt|excel file|video|reel|audio|music)\b|"
                    r"(?:استودیو)|(?:خروجی|دانلود|ساخت|تولید).*(?:پی.?دی.?اف|پاورپوینت|ویدیو|ریلز|صدا|موسیقی)", re.IGNORECASE),
     ),
     (

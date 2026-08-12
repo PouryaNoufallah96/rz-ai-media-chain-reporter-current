@@ -13,7 +13,6 @@ import gzip
 import sys
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -21,7 +20,6 @@ import auth
 import database
 from config import PORT, ORIGIN, COOKIE_SECURE, OPENROUTER_KEY, SCRIPT_URL
 from server_utils import _json_default
-from llm import OpenRouterVideoError
 
 # Handler functions — one import per domain module.
 from handlers.copy import handle_generate_copy
@@ -45,11 +43,6 @@ from handlers.chat import (
     start_chat_indexer,
 )
 from handlers.translation import handle_translate_cards
-from handlers.studio import (handle_studio_models, handle_studio_jobs,
-                             handle_studio_draft, handle_studio_script,
-                             handle_studio_direct,
-                             handle_studio_generate, handle_studio_poll,
-                             handle_studio_download)
 from telegram_public import DEFAULT_TELEGRAM_SOURCES, fetch_many_telegram_public_posts, rank_telegram_posts
 
 
@@ -112,32 +105,6 @@ class Handler(BaseHTTPRequestHandler):
             if user is None:
                 return self._error(401, 'Not authenticated')
             self._json(handle_schedule_list(user['id']))
-        elif self.path == '/api/studio/models':
-            user = auth.get_current_user(self)
-            if user is None:
-                return self._error(401, 'Not authenticated')
-            try:
-                self._json(handle_studio_models())
-            except Exception as e:
-                self._error(502, str(e))
-        elif self.path == '/api/studio/jobs':
-            user = auth.get_current_user(self)
-            if user is None:
-                return self._error(401, 'Not authenticated')
-            self._json(handle_studio_jobs(user['id']))
-        elif self.path.startswith('/api/studio/download'):
-            user = auth.get_current_user(self)
-            if user is None:
-                return self._error(401, 'Not authenticated')
-            params = parse_qs(urlparse(self.path).query)
-            try:
-                spec = handle_studio_download(user['id'], params.get('id', [''])[0])
-                spec['download'] = params.get('download', [''])[0] == '1'
-                self._file(spec)
-            except ValueError as e:
-                self._error(400, str(e))
-            except Exception as e:
-                self._error(502, str(e))
         elif self.path.rstrip('/') == '/api/chat/history':
             user = auth.get_current_user(self)
             if user is None:
@@ -272,31 +239,6 @@ class Handler(BaseHTTPRequestHandler):
                 if user is None:
                     return self._error(401, 'Not authenticated')
                 self._json(handle_schedule_reschedule(user['id'], body))
-            elif path == '/api/studio/draft':
-                user = auth.get_current_user(self)
-                if user is None:
-                    return self._error(401, 'Not authenticated')
-                self._json(handle_studio_draft(user['id'], body))
-            elif path == '/api/studio/script':
-                user = auth.get_current_user(self)
-                if user is None:
-                    return self._error(401, 'Not authenticated')
-                self._json(handle_studio_script(user['id'], body))
-            elif path == '/api/studio/direct':
-                user = auth.get_current_user(self)
-                if user is None:
-                    return self._error(401, 'Not authenticated')
-                self._json(handle_studio_direct(user['id'], body))
-            elif path == '/api/studio/generate':
-                user = auth.get_current_user(self)
-                if user is None:
-                    return self._error(401, 'Not authenticated')
-                self._json(handle_studio_generate(user['id'], body))
-            elif path == '/api/studio/poll':
-                user = auth.get_current_user(self)
-                if user is None:
-                    return self._error(401, 'Not authenticated')
-                self._json(handle_studio_poll(user['id'], body))
             elif path == '/api/copy/generate':
                 self._json(handle_generate_copy(body))
             elif path == '/api/promo/generate-ideas':
@@ -350,8 +292,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({'ok': True})
             else:
                 self._error(404, f'Unknown route: {path}')
-        except OpenRouterVideoError as e:
-            self._error(502, str(e))
         except ValueError as e:
             self._error(400, str(e))
         except requests.HTTPError as e:
@@ -381,53 +321,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def _error(self, code, msg):
         self._json({'error': msg}, code)
-
-    def _file(self, spec):
-        path = spec['path']
-        total = path.stat().st_size
-        start, end = 0, total - 1
-        status = 200
-        range_header = self.headers.get('Range', '')
-        if range_header.startswith('bytes='):
-            try:
-                raw_start, raw_end = range_header[6:].split('-', 1)
-                if raw_start:
-                    start = int(raw_start)
-                if raw_end:
-                    end = min(int(raw_end), total - 1)
-                if start < 0 or start > end or start >= total:
-                    raise ValueError
-                status = 206
-            except (TypeError, ValueError):
-                self.send_response(416)
-                self.send_cors()
-                self.send_header('Content-Range', f'bytes */{total}')
-                self.send_header('Content-Length', '0')
-                self.end_headers()
-                return
-        length = end - start + 1
-        self.send_response(status)
-        self.send_cors()
-        self.send_header('Content-Type', spec.get('contentType', 'application/octet-stream'))
-        self.send_header('Accept-Ranges', 'bytes')
-        disposition = 'attachment' if spec.get('download') else 'inline'
-        self.send_header('Content-Disposition', f'{disposition}; filename="{spec.get("filename", path.name)}"')
-        if status == 206:
-            self.send_header('Content-Range', f'bytes {start}-{end}/{total}')
-        self.send_header('Content-Length', str(length))
-        self.end_headers()
-        with path.open('rb') as source:
-            source.seek(start)
-            remaining = length
-            while remaining > 0:
-                chunk = source.read(min(1024 * 1024, remaining))
-                if not chunk:
-                    break
-                try:
-                    self.wfile.write(chunk)
-                except (BrokenPipeError, ConnectionResetError, OSError):
-                    return
-                remaining -= len(chunk)
 
     def _stream_ndjson_start(self):
         self.send_response(200)
