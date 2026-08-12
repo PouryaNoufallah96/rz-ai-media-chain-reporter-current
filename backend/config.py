@@ -35,11 +35,6 @@ TELEGRAM_PROXY   = os.environ.get('TELEGRAM_PROXY', '')   # e.g. http://127.0.0.
 DRIVE_FOLDER_URL = os.environ.get('GOOGLE_DRIVE_FOLDER_URL', '')
 
 OPENROUTER_URL  = 'https://openrouter.ai/api/v1/chat/completions'
-STUDIO_SCRIPT_MODEL = os.environ.get('STUDIO_SCRIPT_MODEL') or 'openai/gpt-5.5'
-STUDIO_FFMPEG_PATH = os.environ.get('STUDIO_FFMPEG_PATH', 'ffmpeg')
-STUDIO_OUTPUT_DIR = Path(
-    os.environ.get('STUDIO_OUTPUT_DIR') or str(Path(__file__).parent / 'data' / 'studio')
-)
 
 # ── Editorial AI models (all routed through OpenRouter) ───────────────────────
 EDITORIAL_MODELS = {

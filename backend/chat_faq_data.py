@@ -151,8 +151,8 @@ _PAIRS = (
      'How does the chatbot answer without using AI tokens?', 'It checks local policy responses, approved FAQs, and the permanent brand-and-language-aware answer cache before calling OpenRouter.',
      'چت‌بات چگونه بدون مصرف توکن هوش مصنوعی پاسخ می‌دهد؟', 'پیش از فراخوانی OpenRouter، پاسخ‌های قوانین محلی، FAQ تاییدشده و حافظه دائمی حساس به برند و زبان بررسی می‌شوند.'),
     ('unsupported_actions', 100, ('website cannot do', 'unsupported action', 'email delivery', 'linkedin publishing', 'crypto trading', 'wallet transaction', 'video generation'), ('کارهای پشتیبانی نشده', 'وب سایت نمی تواند', 'ارسال ایمیل', 'انتشار لینکدین', 'معامله رمزارز', 'تراکنش کیف پول', 'تولید ویدیو'),
-     'What can the website not do?', 'The website cannot perform undocumented actions such as email delivery, LinkedIn publishing, crypto trading, payments, wallet transactions, external web searches, or deployed Studio video generation.',
-     'وب‌سایت چه کارهایی را نمی‌تواند انجام دهد؟', 'وب‌سایت نمی‌تواند عملیات مستندن‌شده‌ای مانند ارسال ایمیل، انتشار در LinkedIn، معامله رمزارز، پرداخت، تراکنش کیف پول، جستجوی خارجی وب یا تولید ویدیوی Studio در نسخه منتشرشده را انجام دهد.'),
+     'What can the website not do?', 'The website cannot perform undocumented actions such as email delivery, LinkedIn publishing, crypto trading, payments, wallet transactions, external web searches, or video generation.',
+     'وب‌سایت چه کارهایی را نمی‌تواند انجام دهد؟', 'وب‌سایت نمی‌تواند عملیات مستندن‌شده‌ای مانند ارسال ایمیل، انتشار در LinkedIn، معامله رمزارز، پرداخت، تراکنش کیف پول، جستجوی خارجی وب یا تولید ویدیو را انجام دهد.'),
 )
 
 

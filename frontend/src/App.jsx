@@ -4,7 +4,6 @@ import MultimediaPage from './pages/MultimediaPage'
 import AboutPage from './pages/AboutPage'
 import LoginPage from './pages/LoginPage'
 import AccountPage from './pages/AccountPage'
-import StudioPage from './pages/StudioPage'
 import { RequireAuth, GuestOnly } from './components/RequireAuth'
 import { useAuthStore } from './store/authStore'
 import { useLanguageStore, localizeDocument } from './store/languageStore'
@@ -30,7 +29,6 @@ export default function App() {
       <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
       <Route path="/" element={<RequireAuth><Navigate to="/multimedia" replace /></RequireAuth>} />
       <Route path="/multimedia" element={<RequireAuth><MultimediaPage /></RequireAuth>} />
-      <Route path="/studio" element={<RequireAuth><StudioPage /></RequireAuth>} />
       <Route path="/about" element={<RequireAuth><AboutPage /></RequireAuth>} />
       <Route path="/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
     </Routes>

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { useMmStore, API_BASE, MEDIA_COLORS, PLAT_COLORS, IMAGE_MODEL_OPTIONS, MEDIA_LIST, PLAT_LIST, EDITORIAL_MODEL_META } from '../../store/mmStore'
 import { useLanguageStore, t } from '../../store/languageStore'
 import { useAccountStore } from '../../store/accountStore'
-import { useStudioStore } from '../../store/studioStore'
 import { PLAT_ICONS } from '../../utils/platformIcons'
 import chainReporterLogoUrl from '../../assets/chainreporter-logo.png'
 import rzPrimeLogoUrl from '../../assets/rz-prime-logo.png'
@@ -200,7 +199,6 @@ export default function PreviewPanel({ mode = 'multimedia', card: cardProp, onCl
   const tr = text => t(language, text)
   const { activeCard, setActiveCard, updateCardStatus, updatePlatformCard } = useMmStore()
   const { confirmScheduleSaved, discardSaved, updateSavedCard, updateSavedCardLocal } = useAccountStore()
-  const addStudioCards = useStudioStore(state => state.addCards)
   const card = mode === 'saved' ? cardProp : activeCard
   const isOpen = !!card
   // A routed card can retain its article id while moving between platforms.
@@ -754,11 +752,6 @@ export default function PreviewPanel({ mode = 'multimedia', card: cardProp, onCl
     else setActiveCard(null)
   }
 
-  function handleSendToStudio() {
-    addStudioCards({ ...actionCard, copy: copyText, hashtags: hashtagsState })
-    setActionMsg({ type:'success', text:'Story added to Studio.' })
-  }
-
   function chooseVariant(variant, index) {
     const nextCopy = variant?.copy || ''
     const nextHashtags = Array.isArray(variant?.hashtags) ? variant.hashtags : []
@@ -985,10 +978,6 @@ export default function PreviewPanel({ mode = 'multimedia', card: cardProp, onCl
         <div style={{padding:'14px 16px',borderTop:'1px solid rgba(255,255,255,.07)',display:'flex',flexDirection:'column',gap:8,flexShrink:0}}>
           {mode === 'multimedia' ? (
             <>
-              <button className="preview-studio-action" type="button" onClick={handleSendToStudio}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="m15 10 4.6-2.3a1 1 0 0 1 1.4.9v6.8a1 1 0 0 1-1.4.9L15 14M4 6h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/></svg>
-                <span>Send to Studio</span>
-              </button>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn-mint" style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase',fontWeight:700,opacity:isApprovalBusy?0.65:1}} onClick={handleApprove} disabled={actionBusy}>{isApprovalBusy && <ButtonSpinner />}{approveLabel}</button>
                 <button className={showImage?'btn-mint':'btn-ghost'} style={{flex:1,padding:9,fontSize:11,letterSpacing:'.06em',textTransform:'uppercase',fontWeight:showImage?700:400}} onClick={()=>{setShowImage(s=>!s);setShowSchedule(false)}}>{showImage?'▲ Hide':'Need Image'}</button>
